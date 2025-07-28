@@ -9,7 +9,7 @@ import {
   listLeads,
   autoConnectLeads,
   generateEmailsForMultipleLeads,
-} from './functions/index';
+} from './functions/index.js';
 import { agent } from './agent.js'; // Agentica 인스턴스
 import { getLatestEmailForRewrite } from './functions/emailFunctions.js';
 import type { AgenticaUserMessageContent } from '@agentica/core';
@@ -20,7 +20,7 @@ export async function analyzePromptAI(prompt: string) {
       type: "text",
       text: `
 사용자 요청을 분석하여 의도(intent)와 필요한 파라미터를 추출해줘.
-다음 JSON 형식으로만 응답해:
+반드시 다음 JSON 형식으로만 응답해:
 {
   "intent": "register_project|initial_email|followup_email|email_rewrite_request|improve_email|analyze_email|connect_leads|list_projects|list_leads|unknown",
   "extracted_params": {
@@ -37,12 +37,17 @@ export async function analyzePromptAI(prompt: string) {
   },
   "confidence": 0.0
 }
+
 예시:
-- '이런 사업 할거야: AI 솔루션' → intent: register_project, description: 'AI 솔루션'
-- '프로젝트 1번에 메일 보내줘' → intent: initial_email, projectId: 1
-- '메일 다시 써줘' → intent: email_rewrite_request, userFeedback: '메일 다시 써줘'
-- '사업 리스트 보여줘' → intent: list_projects
-`
+- "이런 사업 할거야: AI 솔루션" → register_project
+- "후속 메일 작성할게" → followup_email
+- "메일 다시 써줘" → email_rewrite_request
+- "연결해줘" → connect_leads
+- "고객 리스트 보여줘" → list_leads
+- "사업 뭐하고 있는지 보여줘" → list_projects
+- "메일 분석해줘" → analyze_email
+- "초기 메일 보내줘" → initial_email
+      `
     },
     {
       type: "text",
@@ -52,25 +57,66 @@ export async function analyzePromptAI(prompt: string) {
 
   try {
     const resultHistories = await agent.conversate(messages);
-    const lastHistory = resultHistories[resultHistories.length - 1];
-    const lastText = 'text' in lastHistory ? lastHistory.text : '';
+    const lastHistory = resultHistories.at(-1);
+    const lastText = lastHistory && 'text' in lastHistory ? lastHistory.text : "";
 
+    let parsed: any;
     try {
-      return JSON.parse(lastText);
+      parsed = JSON.parse(lastText);
+      if (parsed.intent && parsed.intent !== "unknown") return parsed;
     } catch {
+      // GPT 응답 JSON 파싱 실패 시 fallback으로 진행
+    }
+
+    // ✅ Fallback intent 추정 로직
+    const lower = prompt.toLowerCase();
+
+    if (lower.includes("사업") && (lower.includes("등록") || lower.includes("할거야"))) {
       return {
-        intent: 'unknown',
-        extracted_params: {},
-        confidence: 0,
+        intent: "register_project",
+        extracted_params: { description: prompt },
+        confidence: 0.4
       };
     }
+
+    if (lower.includes("초기 메일") || lower.includes("메일 보내")) {
+      return { intent: "initial_email", extracted_params: {}, confidence: 0.4 };
+    }
+
+    if (lower.includes("후속") || lower.includes("follow up") || lower.includes("재전송")) {
+      return { intent: "followup_email", extracted_params: {}, confidence: 0.4 };
+    }
+
+    if (lower.includes("다시") || lower.includes("수정") || lower.includes("별로") || lower.includes("재작성")) {
+      return {
+        intent: "email_rewrite_request",
+        extracted_params: { userFeedback: prompt },
+        confidence: 0.4
+      };
+    }
+
+    if (lower.includes("연결")) {
+      return { intent: "connect_leads", extracted_params: {}, confidence: 0.4 };
+    }
+
+    if (
+      (lower.includes("고객") || lower.includes("리드") || lower.includes("기업")) &&
+      lower.includes("리스트")
+    ) {
+      return { intent: "list_leads", extracted_params: {}, confidence: 0.4 };
+    }
+
+    if (
+      lower.includes("사업") &&
+      (lower.includes("리스트") || lower.includes("진행") || lower.includes("하고 있는"))
+    ) {
+      return { intent: "list_projects", extracted_params: {}, confidence: 0.4 };
+    }
+
+    return { intent: "unknown", extracted_params: {}, confidence: 0 };
   } catch (e) {
-    console.error('analyzePromptAI error:', e);
-    return {
-      intent: 'unknown',
-      extracted_params: {},
-      confidence: 0,
-    };
+    console.error("analyzePromptAI error:", e);
+    return { intent: "unknown", extracted_params: {}, confidence: 0 };
   }
 }
 
