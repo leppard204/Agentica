@@ -1,82 +1,41 @@
 import axios from 'axios';
-const SPRING_BASE_URL = 'http://localhost:8080';
-const springClient = axios.create({
-    baseURL: SPRING_BASE_URL,
-    timeout: 5000
-});
-export class SpringService {
-    async createProject(project) {
-        const res = await springClient.post('/projects', project);
+const BASE_URL = 'http://localhost:8080';
+export const springService = {
+    async createProject({ name, description, industry }) {
+        const res = await axios.post(`${BASE_URL}/projects`, { name, description, industry });
         return res.data;
-    }
-    async getAllProjects() {
-        const res = await springClient.get('/projects');
+    },
+    async listProjects() {
+        const res = await axios.get(`${BASE_URL}/projects`);
         return res.data;
-    }
-    async getProjectById(id) {
-        const res = await springClient.get(`/projects/${id}`);
+    },
+    async createLead({ companyName, industry, contactEmail, contactName }) {
+        const res = await axios.post(`${BASE_URL}/leads`, { companyName, industry, contactEmail, contactName });
         return res.data;
-    }
-    async createLead(lead) {
-        const res = await springClient.post('/leads', lead);
+    },
+    async listLeads() {
+        const res = await axios.get(`${BASE_URL}/leads`);
         return res.data;
-    }
-    async getAllLeads() {
-        const res = await springClient.get('/leads');
-        return res.data;
-    }
-    async getLeadById(id) {
-        const res = await springClient.get(`/leads/${id}`);
-        return res.data;
-    }
+    },
     async autoConnectLeads(projectId) {
-        const res = await springClient.post(`/projects/${projectId}/auto-connect`);
+        const res = await axios.post(`${BASE_URL}/projects/${projectId}/auto-connect`);
         return res.data;
-    }
+    },
+    async getProjectById(projectId) {
+        const res = await axios.get(`${BASE_URL}/projects/${projectId}`);
+        return res.data;
+    },
+    async getLeadById(leadId) {
+        const res = await axios.get(`${BASE_URL}/leads/${leadId}`);
+        return res.data;
+    },
     async saveEmail(projectId, leadId, subject, body) {
-        const res = await springClient.post('/emails', {
-            projectId,
-            leadId,
-            subject,
-            body
-        });
+        const res = await axios.post(`${BASE_URL}/emails`, { projectId, leadId, subject, body });
+        return res.data;
+    },
+    async submitFeedback({ emailId, feedbackText }) {
+        const res = await axios.post(`${BASE_URL}/feedbacks`, { emailId, feedbackText });
         return res.data;
     }
-    async getLatestEmail(projectId, leadId) {
-        try {
-            const res = await springClient.get(`/emails?projectId=${projectId}&leadId=${leadId}`);
-            const emails = res.data;
-            if (emails.length > 0) {
-                return emails.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-            }
-            return null;
-        }
-        catch {
-            return null;
-        }
-    }
-    async saveFeedback(projectId, leadId, emailId, summary, responseType) {
-        const res = await springClient.post('/feedback/', {
-            projectId,
-            leadId,
-            emailId,
-            responseSummary: summary,
-            responseType
-        });
-        return res.data;
-    }
-    async getLatestFeedback(emailId) {
-        try {
-            const res = await springClient.get(`/feedback/latest/${emailId}`);
-            return res.data;
-        }
-        catch {
-            return null;
-        }
-    }
-    async sendEmail(emailId) {
-        const res = await springClient.post(`/emails/${emailId}/send`);
-        return res.data.message;
-    }
-}
-export const springService = new SpringService();
+    // 필요시 추가 엔드포인트 여기에 계속 확장
+};

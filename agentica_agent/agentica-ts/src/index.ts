@@ -1,3 +1,4 @@
+// index.ts
 import { chatbotHandler } from './chatbotHandler.js';
 import readline from 'readline';
 
@@ -18,7 +19,7 @@ function ask() {
     } catch (err) {
       console.error('에러:', err);
     }
-    ask(); // 다음 입력 대기
+    ask();
   });
 }
 

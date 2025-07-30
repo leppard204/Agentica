@@ -1,409 +1,244 @@
-// src/functions/emailFunctions.ts
+import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
-// 이메일 품질 분석 함수 (파이썬의 analyze_email_issues 포팅)
-export async function analyzeEmailIssues(params) {
-    const { emailContent, userFeedback } = params;
-    const response = await this.llm.complete({
-        messages: [
-            {
-                role: 'system',
-                content: `
-너는 B2B 이메일 품질 분석 전문가야.
-
-사용자의 피드백을 바탕으로 이메일의 문제점을 분석하고 개선 방안을 제시해.
-반드시 아래 JSON 형식으로만 응답해. 그 외 문장은 절대 포함하지 마.
-
-예시:
-{
-  "issues": ["제목이 너무 일반적임", "본문이 너무 길어서 읽기 어려움"],
-  "suggestions": ["더 구체적인 제목으로 변경", "본문을 2-3문단으로 축약"],
-  "priority": "high"
-}
-
-priority 값은 다음 중 하나여야 해: high, medium, low
-        `.trim()
-            },
-            {
-                role: 'user',
-                content: `이메일 내용:\n제목: ${emailContent.subject}\n본문: ${emailContent.body}\n\n사용자 피드백: ${userFeedback}\n\n위 내용을 바탕으로 이메일의 문제점을 분석해줘.`
-            }
-        ]
-    });
-    try {
-        const match = response.match(/\{.*\}/s);
-        if (match) {
-            const result = JSON.parse(match[0]);
-            return {
-                issues: result.issues || [],
-                suggestions: result.suggestions || [],
-                priority: result.priority || 'medium'
-            };
-        }
-    }
-    catch (e) {
-        console.error('이메일 분석 실패:', e);
-    }
-    return {
-        issues: ['분석 중 오류가 발생했습니다'],
-        suggestions: ['이메일을 다시 작성해주세요'],
-        priority: 'medium'
-    };
-}
-// 고도화된 메일 재작성 함수 (파이썬의 regenerate_email_with_feedback 포팅)
-export async function regenerateEmailWithFeedback(params) {
-    const { projectId, leadInfo, originalEmail, userFeedback, emailType = 'initial' } = params;
-    try {
-        // 먼저 이메일 문제점 분석
-        const analysis = await analyzeEmailIssues.call(this, {
-            emailContent: originalEmail,
-            userFeedback
-        });
-        const project = await springService.getProjectById(projectId);
-        const context = project.description ?? '등록된 사업 설명이 없습니다.';
-        // 이메일 타입에 따른 시스템 메시지 설정
-        const systemContent = emailType === 'initial'
-            ? `
-너는 B2B 세일즈 이메일 재작성 전문가야.
-사용자의 피드백을 바탕으로 이메일을 개선해.
-다음 JSON 형식으로만 응답해. 설명은 포함하지 마.
-{
-  "subject": "개선된 이메일 제목",
-  "body": "개선된 이메일 본문"
-}
-
-이메일에는 다음 요소를 포함해:
-- 고객 상황 언급
-- 우리 사업/서비스의 핵심 가치 제안
-- 기대 효과 2~3가지
-- 회신 유도 문구
-      `.trim()
-            : `
-너는 B2B 세일즈 후속 이메일 재작성 전문가야.
-사용자의 피드백을 바탕으로 후속 이메일을 개선해.
-다음 JSON 형식으로만 응답해. 설명은 포함하지 마.
-{
-  "subject": "개선된 후속 이메일 제목",
-  "body": "개선된 후속 이메일 본문"
-}
-
-후속 이메일에는 다음 요소를 포함해:
-- 이전 제안에 대한 추가 정보
-- 고객의 우려사항 해결
-- 구체적인 다음 단계 제시
-      `.trim();
-        const response = await this.llm.complete({
-            messages: [
-                { role: 'system', content: systemContent },
-                {
-                    role: 'user',
-                    content: `
-사업 설명: ${context}
-고객 정보: ${JSON.stringify(leadInfo)}
-원본 이메일:
-제목: ${originalEmail.subject}
-본문: ${originalEmail.body}
-사용자 피드백: ${userFeedback}
-분석된 문제점: ${analysis.issues.join(', ')}
-개선 제안: ${analysis.suggestions.join(', ')}
-
-위 정보를 바탕으로 개선된 이메일을 작성해줘.
-          `
-                }
-            ]
-        });
-        const match = response.match(/\{.*\}/s);
-        if (match) {
-            const parsed = JSON.parse(match[0]);
-            const subject = parsed.subject ?? originalEmail.subject;
-            const body = parsed.body ?? originalEmail.body;
-            await springService.saveEmail(projectId, leadInfo.id, subject, body);
-            return { subject, body, lead: leadInfo, status: 'success' };
-        }
-    }
-    catch (e) {
-        console.error('메일 재작성 실패:', e);
-    }
-    return {
-        subject: '개선된 제안',
-        body: '사용자 피드백을 반영하여 이메일을 개선했습니다.',
-        lead: leadInfo,
-        status: 'error',
-        error: '재작성 실패'
-    };
-}
-// 통합 이메일 거부 처리 함수 (파이썬의 handle_email_rejection 포팅)
-export async function handleEmailRejection(params) {
-    const { projectId, leadInfo, originalEmail, userFeedback, emailType = 'initial' } = params;
-    // 이메일 문제점 분석
-    const analysis = await analyzeEmailIssues.call(this, {
-        emailContent: originalEmail,
-        userFeedback
-    });
-    // 우선순위가 높거나 문제가 심각한 경우 새로 작성
-    if (analysis.priority === 'high' || analysis.issues.length > 2) {
-        const newEmail = await regenerateEmailWithFeedback.call(this, {
-            projectId,
-            leadInfo,
-            originalEmail,
-            userFeedback,
-            emailType
-        });
-        return {
-            action: 'regenerate',
-            newEmail,
-            analysis,
-            improvements: analysis.suggestions,
-            message: '문제점이 심각하여 이메일을 새로 작성했습니다.'
-        };
-    }
-    else {
-        // 문제가 경미한 경우 개선된 이메일 제공
-        const improvedEmail = await regenerateEmailWithFeedback.call(this, {
-            projectId,
-            leadInfo,
-            originalEmail,
-            userFeedback,
-            emailType
-        });
-        return {
-            action: 'improve',
-            newEmail: improvedEmail,
-            analysis,
-            improvements: analysis.suggestions,
-            message: '기존 이메일을 개선했습니다.'
-        };
-    }
-}
-// 다중 기업 이메일 생성 함수 (파이썬의 generate_emails_for_multiple_leads 포팅)
-export async function generateEmailsForMultipleLeads(params) {
-    const { projectId, leadInfoList } = params;
-    const results = [];
-    for (let i = 0; i < leadInfoList.length; i++) {
-        const lead = leadInfoList[i];
+// 1. 초안 메일 생성
+export async function generateInitialEmail({ userPrompt }) {
+    const idPrompt = `
+아래 프롬프트에서 projectId(사업 id), leadId(기업 id)를 추출해.
+반드시 JSON만 반환. 예시: {"projectId":1, "leadId":2}
+`.trim();
+    // ID 추출
+    const idResult = await agent.conversate([
+        { type: 'text', text: idPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    const lastId = Array.isArray(idResult) ? idResult[idResult.length - 1] : idResult;
+    const idText = typeof lastId === 'string'
+        ? lastId
+        : lastId.content ?? lastId.text ?? '';
+    const idMatch = idText.match(/\{.*\}/s);
+    if (!idMatch)
+        return { status: 'error', error: 'projectId/leadId 추출 실패' };
+    const { projectId, leadId } = JSON.parse(idMatch[0]);
+    const project = await springService.getProjectById(projectId);
+    const lead = await springService.getLeadById(leadId);
+    const systemPrompt = `
+아래 사업설명과 고객정보를 참고해 맞춤 B2B 세일즈 이메일을 JSON으로만 생성.
+예시: {"subject":"제목", "body":"본문"}
+`.trim();
+    const mailResult = await agent.conversate([
+        { type: 'text', text: systemPrompt },
+        { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}` }
+    ]);
+    const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
+    const mailText = typeof lastMail === 'string'
+        ? lastMail
+        : lastMail.content ?? lastMail.text ?? '';
+    const match = mailText.match(/\{.*\}/s);
+    if (match) {
         try {
-            const email = await generateInitialEmail.call(this, { projectId, leadInfo: lead });
-            results.push({
-                lead,
-                email,
-                status: 'success',
-                leadIndex: i + 1
-            });
-        }
-        catch (error) {
-            results.push({
-                lead,
-                email: {
-                    subject: '제안드립니다',
-                    body: '안녕하세요, 고객님의 상황을 고려한 제안을 드리고자 연락드립니다...',
-                    status: 'error'
-                },
-                status: 'error',
-                leadIndex: i + 1,
-                error: (error instanceof Error ? error.message : '알 수 없는 오류')
-            });
-        }
-    }
-    return {
-        type: 'multiple_initial_emails',
-        projectId,
-        totalLeads: leadInfoList.length,
-        successCount: results.filter(r => r.status === 'success').length,
-        errorCount: results.filter(r => r.status === 'error').length,
-        emails: results
-    };
-}
-// 초안 세일즈 이메일 생성 (기존 함수 개선)
-export async function generateInitialEmail(params) {
-    const { projectId, leadInfo } = params;
-    try {
-        const project = await springService.getProjectById(projectId);
-        const context = project.description ?? '등록된 사업 설명이 없습니다.';
-        const response = await this.llm.complete({
-            messages: [
-                {
-                    role: 'system',
-                    content: `
-너는 B2B 세일즈 이메일 작성을 전문으로 하는 AI야.
-다음 JSON 형식으로만 응답해. 설명은 포함하지 마.
-{
-  "subject": "이메일 제목",
-  "body": "이메일 본문 내용"
-}
-
-이메일에는 다음 요소를 포함해:
-- 고객 상황 언급
-- 우리 사업/서비스의 핵심 가치 제안
-- 기대 효과 2~3가지
-- 회신 유도 문구
-`.trim()
-                },
-                {
-                    role: 'user',
-                    content: `사업 설명: ${context}\n고객 정보: ${JSON.stringify(leadInfo)}\n위 조건을 기반으로 이메일 초안을 JSON 형식으로 작성해줘.`
-                }
-            ]
-        });
-        const match = response.match(/\{.*\}/s);
-        if (match) {
             const parsed = JSON.parse(match[0]);
-            const subject = parsed.subject ?? '';
-            const body = parsed.body ?? '';
-            await springService.saveEmail(projectId, leadInfo.id, subject, body);
-            return { subject, body, lead: leadInfo, status: 'success' };
+            await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
+            return { subject: parsed.subject, body: parsed.body, status: 'success' };
+        }
+        catch {
+            return { status: 'error', error: '이메일 JSON 파싱 실패' };
         }
     }
-    catch (e) {
-        console.error('초안 생성 실패:', e);
-    }
-    return {
-        subject: '제안드립니다',
-        body: '안녕하세요, 고객님의 상황을 고려한 제안을 드리고자 연락드립니다...',
-        lead: leadInfo,
-        status: 'error',
-        error: '생성 실패'
-    };
+    return { status: 'error', error: '이메일 생성 실패' };
 }
-// 여러 기업에 대해 이메일 생성 (기존 함수 유지)
-export async function generateMultipleEmails(params) {
-    const { projectId, leads } = params;
-    const results = await Promise.allSettled(leads.map(lead => generateInitialEmail.call(this, { projectId, leadInfo: lead })));
-    return results.map((r, i) => r.status === 'fulfilled'
-        ? r.value
-        : {
-            subject: '제안드립니다',
-            body: '안녕하세요, 고객님의 상황을 고려한 제안을 드리고자 연락드립니다...',
-            lead: leads[i],
-            status: 'error',
-            error: r.reason?.message ?? '알 수 없는 오류'
-        });
-}
-// 피드백을 기반으로 후속 이메일 생성 (기존 함수 개선)
-export async function generateFollowupEmail(params) {
-    const { projectId, leadId, feedbackSummary } = params;
-    try {
-        const project = await springService.getProjectById(projectId);
-        const lead = await springService.getLeadById(leadId);
-        const context = project.description ?? '등록된 사업 설명이 없습니다.';
-        const response = await this.llm.complete({
-            messages: [
-                {
-                    role: 'system',
-                    content: `
-너는 B2B 후속 이메일 작성 전문가야. 피드백을 기반으로 다음 JSON 형식으로 작성해:
-{
-  "subject": "후속 메일 제목",
-  "body": "본문 내용"
-}
-
-후속 이메일에는 다음 요소를 포함해:
-- 이전 제안에 대한 추가 정보
-- 고객의 우려사항 해결
-- 구체적인 다음 단계 제시
-        `.trim()
-                },
-                {
-                    role: 'user',
-                    content: `사업 설명: ${context}\n피드백: ${feedbackSummary}`
-                }
-            ]
-        });
-        const match = response.match(/\{.*\}/s);
-        if (match) {
+// 2. 후속 메일 생성
+export async function generateFollowupEmail({ userPrompt }) {
+    const idPrompt = `
+아래 프롬프트에서 projectId, leadId, feedbackSummary(고객 피드백 요약)를 추출해.
+예시: {"projectId":1, "leadId":2, "feedbackSummary":"가격이 비싸다고 응답"}
+`.trim();
+    const idResult = await agent.conversate([
+        { type: 'text', text: idPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    const lastId = Array.isArray(idResult) ? idResult[idResult.length - 1] : idResult;
+    const idText = typeof lastId === 'string'
+        ? lastId
+        : lastId.content ?? lastId.text ?? '';
+    const idMatch = idText.match(/\{.*\}/s);
+    if (!idMatch)
+        return { status: 'error', error: '파라미터 추출 실패' };
+    const { projectId, leadId, feedbackSummary } = JSON.parse(idMatch[0]);
+    const project = await springService.getProjectById(projectId);
+    const lead = await springService.getLeadById(leadId);
+    const systemPrompt = `
+피드백, 사업설명, 고객정보를 참고해 후속 B2B 세일즈 이메일을 JSON으로만 생성.
+예시: {"subject":"제목", "body":"본문"}
+`.trim();
+    const mailResult = await agent.conversate([
+        { type: 'text', text: systemPrompt },
+        { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n피드백: ${feedbackSummary}` }
+    ]);
+    const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
+    const mailText = typeof lastMail === 'string'
+        ? lastMail
+        : lastMail.content ?? lastMail.text ?? '';
+    const match = mailText.match(/\{.*\}/s);
+    if (match) {
+        try {
             const parsed = JSON.parse(match[0]);
-            const subject = parsed.subject ?? '';
-            const body = parsed.body ?? '';
-            await springService.saveEmail(projectId, leadId, subject, body);
-            return { subject, body, lead, status: 'success' };
+            await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
+            return { subject: parsed.subject, body: parsed.body, status: 'success' };
+        }
+        catch {
+            return { status: 'error', error: '후속 이메일 JSON 파싱 실패' };
         }
     }
-    catch (e) {
-        console.error('후속 메일 생성 실패:', e);
+    return { status: 'error', error: '후속 이메일 생성 실패' };
+}
+// 3. 이메일 재작성 (피드백 기반)
+export async function regenerateEmailWithFeedback({ userPrompt }) {
+    const paramPrompt = `
+아래 프롬프트에서 projectId, leadId, originalEmail(제목/본문), userFeedback을 추출해.
+예시: {"projectId":1, "leadId":2, "originalEmail":{"subject":"...","body":"..."},"userFeedback":"별로라고 함"}
+`.trim();
+    const paramResult = await agent.conversate([
+        { type: 'text', text: paramPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
+    const paramText = typeof lastParam === 'string'
+        ? lastParam
+        : lastParam.content ?? lastParam.text ?? '';
+    const paramMatch = paramText.match(/\{.*\}/s);
+    if (!paramMatch)
+        return { status: 'error', error: '파라미터 추출 실패' };
+    const { projectId, leadId, originalEmail, userFeedback } = JSON.parse(paramMatch[0]);
+    const project = await springService.getProjectById(projectId);
+    const lead = await springService.getLeadById(leadId);
+    const systemPrompt = `
+아래 정보(사업/고객/원본이메일/피드백)를 참고해 개선된 이메일을 JSON으로만 재작성.
+예시: {"subject":"개선된 제목", "body":"개선된 본문"}
+`.trim();
+    const mailResult = await agent.conversate([
+        { type: 'text', text: systemPrompt },
+        { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}` }
+    ]);
+    const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
+    const mailText = typeof lastMail === 'string'
+        ? lastMail
+        : lastMail.content ?? lastMail.text ?? '';
+    const match = mailText.match(/\{.*\}/s);
+    if (match) {
+        try {
+            const parsed = JSON.parse(match[0]);
+            await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
+            return { subject: parsed.subject, body: parsed.body, status: 'success' };
+        }
+        catch {
+            return { status: 'error', error: '재작성 JSON 파싱 실패' };
+        }
+    }
+    return { status: 'error', error: '이메일 재작성 실패' };
+}
+// 4. 이메일 품질 분석
+export async function analyzeEmailIssues({ userPrompt }) {
+    const paramPrompt = `
+아래 프롬프트에서 emailContent(제목/본문), userFeedback을 추출해.
+예시: {"emailContent":{"subject":"...","body":"..."},"userFeedback":"내용이 너무 두루뭉술"}
+`.trim();
+    const paramResult = await agent.conversate([
+        { type: 'text', text: paramPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
+    const paramText = typeof lastParam === 'string'
+        ? lastParam
+        : lastParam.content ?? lastParam.text ?? '';
+    const paramMatch = paramText.match(/\{.*\}/s);
+    if (!paramMatch)
+        return { status: 'error', error: '파라미터 추출 실패' };
+    const { emailContent, userFeedback } = JSON.parse(paramMatch[0]);
+    const systemPrompt = `
+사용자 피드백 기반 이메일 문제점/개선방안/priority를 아래 JSON만으로 응답.
+예시: {"issues":["제목이 두루뭉술함"],"suggestions":["제목 구체화"],"priority":"high"}
+priority: high|medium|low
+`.trim();
+    const mailResult = await agent.conversate([
+        { type: 'text', text: systemPrompt },
+        { type: 'text', text: `이메일 내용:\n제목: ${emailContent.subject}\n본문: ${emailContent.body}\n사용자 피드백: ${userFeedback}` }
+    ]);
+    const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
+    const mailText = typeof lastMail === 'string'
+        ? lastMail
+        : lastMail.content ?? lastMail.text ?? '';
+    const match = mailText.match(/\{.*\}/s);
+    if (match) {
+        try {
+            return JSON.parse(match[0]);
+        }
+        catch {
+            return { status: 'error', error: '분석 JSON 파싱 실패' };
+        }
+    }
+    return { status: 'error', error: '이메일 분석 실패' };
+}
+// 5. 이메일 거부 처리 (분석 후 분기)
+export async function handleEmailRejection({ userPrompt }) {
+    // 품질 분석 먼저
+    const analysis = await analyzeEmailIssues({ userPrompt });
+    // 심각하면 재작성, 아니면 개선안 안내
+    if (analysis.priority === 'high' || (analysis.issues && analysis.issues.length > 2)) {
+        return await regenerateEmailWithFeedback({ userPrompt });
     }
     return {
-        subject: '개선된 제안',
-        body: '피드백을 반영하여 메일을 개선했습니다.',
-        status: 'error',
-        error: '생성 실패'
+        action: 'improve',
+        analysis,
+        message: '분석 결과를 참고하여 이메일을 개선하세요.'
     };
 }
-// 기존 rewriteEmail 함수 개선 (regenerateEmailWithFeedback 사용)
-export async function rewriteEmail(params) {
-    const { originalSubject, originalBody, userFeedback, projectId, leadId } = params;
-    try {
+// 6. 다중 기업용 메일 일괄 생성
+export async function generateEmailsForMultipleLeads({ userPrompt }) {
+    const paramPrompt = `
+아래 프롬프트에서 projectId, leadIds(배열) 추출. 예시: {"projectId":1,"leadIds":[2,3,4]}
+`.trim();
+    const paramResult = await agent.conversate([
+        { type: 'text', text: paramPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
+    const paramText = typeof lastParam === 'string'
+        ? lastParam
+        : lastParam.content ?? lastParam.text ?? '';
+    const paramMatch = paramText.match(/\{.*\}/s);
+    if (!paramMatch)
+        return { status: 'error', error: '파라미터 추출 실패' };
+    const { projectId, leadIds } = JSON.parse(paramMatch[0]);
+    const project = await springService.getProjectById(projectId);
+    const results = [];
+    for (const leadId of leadIds) {
         const lead = await springService.getLeadById(leadId);
-        return await regenerateEmailWithFeedback.call(this, {
-            projectId,
-            leadInfo: lead,
-            originalEmail: { subject: originalSubject, body: originalBody },
-            userFeedback,
-            emailType: 'initial'
-        });
-    }
-    catch (e) {
-        console.error('메일 재작성 실패:', e);
-        return {
-            subject: originalSubject,
-            body: originalBody,
-            status: 'error',
-            error: '재작성 실패'
-        };
-    }
-}
-// 최근 메일 조회 함수 (기존 유지)
-export async function getLatestEmailForRewrite(params) {
-    const { projectId, leadId } = params;
-    if (projectId && leadId) {
-        return await springService.getLatestEmail(projectId, leadId);
-    }
-    throw new Error('메일을 재작성하려면 프로젝트와 기업을 선택해주세요.');
-}
-// 메일 발송 함수
-export async function sendEmail(params) {
-    const { emailId } = params;
-    try {
-        const result = await springService.sendEmail(emailId);
-        return { status: 'success', message: result };
-    }
-    catch (e) {
-        console.error('메일 발송 실패:', e);
-        return { status: 'error', message: '메일 발송에 실패했습니다.' };
-    }
-}
-// 통합 이메일 워크플로우 함수
-export async function completeEmailWorkflow(params) {
-    const { projectId, leadIds, autoSend = false } = params;
-    const emailResults = [];
-    const sentEmails = [];
-    const errors = [];
-    try {
-        // 1. 각 기업에게 메일 생성
-        for (const leadId of leadIds) {
-            const lead = await springService.getLeadById(leadId);
-            const emailResult = await generateInitialEmail.call(this, {
-                projectId,
-                leadInfo: lead
-            });
-            emailResults.push(emailResult);
-            // 2. 자동 발송이 설정되어 있다면 바로 발송
-            if (autoSend && emailResult.status === 'success') {
-                try {
-                    const latestEmail = await springService.getLatestEmail(projectId, leadId);
-                    if (latestEmail) {
-                        await springService.sendEmail(latestEmail.id);
-                        sentEmails.push(latestEmail.id);
-                    }
-                }
-                catch (e) {
-                    errors.push(`기업 ${lead.name}에게 메일 발송 실패: ${e instanceof Error ? e.message : String(e)}`);
-                }
+        const systemPrompt = `
+아래 사업설명, 고객정보 기반 맞춤 이메일을 JSON으로만 생성.
+예시: {"subject":"제목","body":"본문"}
+`.trim();
+        const mailResult = await agent.conversate([
+            { type: 'text', text: systemPrompt },
+            { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}` }
+        ]);
+        const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
+        const mailText = typeof lastMail === 'string'
+            ? lastMail
+            : lastMail.content ?? lastMail.text ?? '';
+        const match = mailText.match(/\{.*\}/s);
+        if (match) {
+            try {
+                const parsed = JSON.parse(match[0]);
+                await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
+                results.push({ leadId, subject: parsed.subject, body: parsed.body, status: 'success' });
+            }
+            catch {
+                results.push({ leadId, status: 'error', error: 'JSON 파싱 실패' });
             }
         }
-        return { emailResults, sentEmails, errors };
-    }
-    catch (e) {
-        if (e instanceof Error) {
-            console.error(e.message);
+        else {
+            results.push({ leadId, status: 'error', error: '이메일 생성 실패' });
         }
-        return { emailResults, sentEmails, errors };
     }
+    return { type: 'multiple_initial_emails', projectId, results };
 }

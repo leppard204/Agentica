@@ -1,10 +1,6 @@
-export declare function summarizeFeedback(this: any, params: {
-    feedbackText: string;
-    projectId: number;
-    leadId: number;
-    emailId: number;
-}): Promise<{
-    summary: string;
-    responseType: string;
-    status: string;
-}>;
+export declare function submitFeedback({ userPrompt }: {
+    userPrompt: string;
+}): Promise<any>;
+export declare function summarizeFeedback({ userPrompt }: {
+    userPrompt: string;
+}): Promise<any>;

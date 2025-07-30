@@ -1,45 +1,40 @@
+// functions/projectFunctions.ts
+import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
-import type { Project } from '../types/index.js';
 
-// 사업 정보 추출 (LLM 호출)
-export async function extractProjectInfo(
-  this: any,
-  params: { prompt: string }
-): Promise<Partial<Project>> {
-  const { prompt } = params;
+export async function createProject({ userPrompt }: { userPrompt: string }) {
   const systemPrompt = `
 사용자의 프롬프트에서 사업 정보(name, description, industry)를 추출해 JSON 형식으로 응답해.
+industry는 아래 리스트 중 하나로만 골라라:
+["AI", "금융", "마케팅", "헬스케어", "교육", "게임", "커머스", "자동차", "건설", "기타"]
 절대 설명하지 말고 JSON만 반환해. 예시:
 {"name":"AI 마케팅", "description":"AI 기반 마케팅 자동화", "industry":"마케팅"}
-  `.trim();
+`.trim();
 
-  // Agentica 내부 LLM 컨텍스트에 this.llm가 자동으로 bind됨
-  const response = await this.llm.complete({
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: prompt }
-    ]
-  });
+  const result = await agent.conversate([
+  { type: 'text', text: systemPrompt },
+  { type: 'text', text: userPrompt }
+  ]);
+  const last = Array.isArray(result) ? result[result.length - 1] : result;
+  const lastText =
+    typeof last === 'string'
+      ? last
+      : (last as any).content ?? (last as any).text ?? '';
 
-  try {
-    const match = response.match(/\{.*\}/s);
-    if (match) return JSON.parse(match[0]);
-  } catch (e) {
-    console.error('Project 추출 파싱 실패:', e);
+  // 3. JSON 응답 추출
+  const match = lastText.match(/\{.*\}/s);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (!parsed.name) return { status: 'error', error: '사업명(name) 추출 실패' };
+      return await springService.createProject(parsed);
+    } catch {
+      return { status: 'error', error: 'JSON 파싱 실패' };
+    }
   }
-
-  return {};
+  return { status: 'error', error: '사업 정보 추출 실패' };
 }
 
-// 프로젝트 목록 조회
-export async function listProjects(): Promise<Project[]> {
-  return await springService.getAllProjects();
-}
-
-//프로젝트 생성
-export async function createProject(
-  this: any,
-  params: { name: string; description: string; industry: string }
-): Promise<Project> {
-  return await springService.createProject(params);
+export async function listProjects() {
+  return await springService.listProjects();
 }
