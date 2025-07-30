@@ -1,16 +1,23 @@
-import type { Project, Lead, Email, Feedback } from '../types/index.js';
-export declare class SpringService {
-    createProject(project: Partial<Project>): Promise<Project>;
-    getAllProjects(): Promise<Project[]>;
-    getProjectById(id: number): Promise<Project>;
-    createLead(lead: Partial<Lead>): Promise<Lead>;
-    getAllLeads(): Promise<Lead[]>;
-    getLeadById(id: number): Promise<Lead>;
-    autoConnectLeads(projectId: number): Promise<Lead[]>;
-    saveEmail(projectId: number, leadId: number, subject: string, body: string): Promise<Email>;
-    getLatestEmail(projectId: number, leadId: number): Promise<Email | null>;
-    saveFeedback(projectId: number, leadId: number, emailId: number, summary: string, responseType: string): Promise<Feedback>;
-    getLatestFeedback(emailId: number): Promise<Feedback | null>;
-    sendEmail(emailId: number): Promise<string>;
-}
-export declare const springService: SpringService;
+export declare const springService: {
+    createProject({ name, description, industry }: {
+        name: string;
+        description: string;
+        industry: string;
+    }): Promise<any>;
+    listProjects(): Promise<any>;
+    createLead({ companyName, industry, contactEmail, contactName }: {
+        companyName: string;
+        industry: string;
+        contactEmail: string;
+        contactName?: string;
+    }): Promise<any>;
+    listLeads(): Promise<any>;
+    autoConnectLeads(projectId: number): Promise<any>;
+    getProjectById(projectId: number): Promise<any>;
+    getLeadById(leadId: number): Promise<any>;
+    saveEmail(projectId: number, leadId: number, subject: string, body: string): Promise<any>;
+    submitFeedback({ emailId, feedbackText }: {
+        emailId: number;
+        feedbackText: string;
+    }): Promise<any>;
+};

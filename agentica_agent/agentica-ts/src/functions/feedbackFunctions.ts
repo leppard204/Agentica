@@ -1,51 +1,61 @@
+import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
 
-// 고객 응답을 요약하고 감정을 분류
-export async function summarizeFeedback(
-  this: any,
-  params: {
-    feedbackText: string;
-    projectId: number;
-    leadId: number;
-    emailId: number;
-  }
-): Promise<{ summary: string; responseType: string; status: string }> {
-  const { feedbackText, projectId, leadId, emailId } = params;
+// 피드백 등록
+export async function submitFeedback({ userPrompt }: { userPrompt: string }) {
   const systemPrompt = `
-너는 B2B 고객 피드백 분석 전문가야.
+아래 프롬프트에서 emailId(이메일 id), feedbackText(피드백)를 추출해 JSON으로만 반환.
+예시: {"emailId":1, "feedbackText":"답장이 없어서 다시 보내달라고 요청함"}
+`.trim();
 
-고객 응답을 요약하고, 긍정적/중립적/부정적 응답인지 분류해.
-반드시 아래 JSON 형식으로만 응답해. 그 외 문장은 절대 포함하지 마.
+  const result = await agent.conversate([
+    { type: 'text', text: systemPrompt },
+    { type: 'text', text: userPrompt }
+  ]);
+  const last = Array.isArray(result) ? result[result.length - 1] : result;
+  const lastText =
+    typeof last === 'string'
+      ? last
+      : (last as any).content ?? (last as any).text ?? '';
 
-예시:
-{
-  "summary": "가격이 부담스럽다는 응답",
-  "response_type": "negative"
-}
-response_type은 반드시: positive, neutral, negative 중 하나여야 해.
-  `.trim();
-
-  try {
-    const response = await this.llm.complete({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `고객 응답: ${feedbackText}` }
-      ]
-    });
-
-    const match = response.match(/\{.*\}/s);
-    if (match) {
-      const result = JSON.parse(match[0]);
-      const summary = result.summary || '';
-      const responseType = result.response_type || 'neutral';
-
-      await springService.saveFeedback(projectId, leadId, emailId, summary, responseType);
-
-      return { summary, responseType, status: 'success' };
+  const match = lastText.match(/\{.*\}/s);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (!parsed.emailId || !parsed.feedbackText) return { status: 'error', error: 'emailId 또는 feedbackText 추출 실패' };
+      return await springService.submitFeedback(parsed);
+    } catch {
+      return { status: 'error', error: 'JSON 파싱 실패' };
     }
-  } catch (e) {
-    console.error('피드백 분석 실패:', e);
   }
+  return { status: 'error', error: '피드백 정보 추출 실패' };
+}
 
-  return { summary: '요약 실패', responseType: 'neutral', status: 'error' };
+// 피드백 요약/분석
+export async function summarizeFeedback({ userPrompt }: { userPrompt: string }) {
+  const systemPrompt = `
+아래 피드백 내용을 한줄로 요약하고, 긍정/중립/부정 중 하나로 분류해 JSON으로만 반환.
+예시: {"summary":"가격이 부담스럽다는 응답", "response_type":"negative"}
+response_type: positive|neutral|negative
+`.trim();
+
+  const result = await agent.conversate([
+    { type: 'text', text: systemPrompt },
+    { type: 'text', text: userPrompt }
+  ]);
+  const last = Array.isArray(result) ? result[result.length - 1] : result;
+  const lastText =
+    typeof last === 'string'
+      ? last
+      : (last as any).content ?? (last as any).text ?? '';
+
+  const match = lastText.match(/\{.*\}/s);
+  if (match) {
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return { status: 'error', error: '요약 JSON 파싱 실패' };
+    }
+  }
+  return { status: 'error', error: '피드백 요약 실패' };
 }

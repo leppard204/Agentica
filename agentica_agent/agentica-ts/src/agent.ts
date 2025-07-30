@@ -28,7 +28,7 @@ export const agent = new Agentica({
   model: "chatgpt",
   vendor: {
     api: openai, // 여기 타입 충돌 나면 버전 문제일 가능성 큼
-    model: "gpt-3.5-turbo",
+    model: "gpt-4o",
   },
   controllers: [
     {

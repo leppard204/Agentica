@@ -1,44 +1,64 @@
+import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
-// 프롬프트에서 여러 기업 정보를 추출
-export async function extractLeadsInfo(params) {
-    const { prompt } = params;
+// 타입 명시!
+export async function createLead({ userPrompt }) {
     const systemPrompt = `
-프롬프트에서 여러 기업 정보를 추출해 리스트로 반환해. 예시:
-[
-  {"name":"테크스타트업A", "contactEmail":"a@a.com", "industry":"AI"}, 
-  {"name":"테크스타트업B", "contactEmail":"b@b.com", "industry":"헬스케어"}
-]
-  `.trim();
-    const response = await this.llm.complete({
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-        ]
-    });
-    try {
-        const match = response.match(/\[.*\]/s);
-        if (match)
-            return JSON.parse(match[0]);
+사용자의 프롬프트에서 기업 정보(companyName, industry, contactEmail, contactName)를 추출해 JSON 형식으로 응답해.
+industry는 아래 리스트 중 하나로만 골라라:
+["AI", "금융", "마케팅", "헬스케어", "교육", "게임", "커머스", "자동차", "건설", "기타"]
+절대 설명하지 말고 JSON만 반환해. 예시:
+{"companyName":"삼성전자", "industry":"전자", "contactEmail":"kim@ss.com", "contactName":"김영수"}
+`.trim();
+    const result = await agent.conversate([
+        { type: 'text', text: systemPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    // 안전하게 content/text 추출
+    const last = Array.isArray(result) ? result[result.length - 1] : result;
+    const lastText = typeof last === 'string'
+        ? last
+        : last.content ?? last.text ?? '';
+    const match = lastText.match(/\{.*\}/s);
+    if (match) {
+        try {
+            const parsed = JSON.parse(match[0]);
+            if (!parsed.companyName)
+                return { status: 'error', error: '기업명(companyName) 추출 실패' };
+            return await springService.createLead(parsed);
+        }
+        catch {
+            return { status: 'error', error: 'JSON 파싱 실패' };
+        }
     }
-    catch (e) {
-        console.error('기업 추출 파싱 실패:', e);
-    }
-    return [];
+    return { status: 'error', error: '기업 정보 추출 실패' };
 }
-// 여러 기업 정보를 한번에 등록
-export async function createMultipleLeads(params) {
-    const { leads } = params;
-    const results = await Promise.allSettled(leads.map(lead => springService.createLead(lead)));
-    return results
-        .filter((r) => r.status === 'fulfilled')
-        .map(r => r.value);
-}
-// 모든 등록된 기업 리스트 조회
 export async function listLeads() {
-    return await springService.getAllLeads();
+    return await springService.listLeads();
 }
-// 프로젝트와 관련 있는 기업 자동 연결
-export async function autoConnectLeads(params) {
-    const { projectId } = params;
-    return await springService.autoConnectLeads(projectId);
+export async function autoConnectLeads({ userPrompt }) {
+    const systemPrompt = `
+사용자의 프롬프트에서 연결할 프로젝트의 id를 추출해 JSON 형식으로만 응답해.
+예시: {"projectId":1}
+`.trim();
+    const result = await agent.conversate([
+        { type: 'text', text: systemPrompt },
+        { type: 'text', text: userPrompt }
+    ]);
+    const last = Array.isArray(result) ? result[result.length - 1] : result;
+    const lastText = typeof last === 'string'
+        ? last
+        : last.content ?? last.text ?? '';
+    const match = lastText.match(/\{.*\}/s);
+    if (match) {
+        try {
+            const parsed = JSON.parse(match[0]);
+            if (!parsed.projectId)
+                return { status: 'error', error: 'projectId 추출 실패' };
+            return await springService.autoConnectLeads(parsed.projectId);
+        }
+        catch {
+            return { status: 'error', error: 'JSON 파싱 실패' };
+        }
+    }
+    return { status: 'error', error: '프로젝트 id 추출 실패' };
 }
