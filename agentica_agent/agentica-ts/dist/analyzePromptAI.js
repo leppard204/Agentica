@@ -10,38 +10,33 @@ const INTENT_LIST = [
     'handle_email_rejection',
     'generate_emails_for_multiple_leads',
     'list_projects',
-    'list_leads'
+    'list_leads',
 ];
 export async function analyzePromptAI(prompt) {
     const messages = [
         {
             type: 'text',
             text: `
-아래 프롬프트의 의도(intent)와 필요한 정보를 추출해 아래 JSON만 반환:
+너는 지금부터 사용자 프롬프트의 의도(intent)와 필요한 파라미터를 분석하는 역할이야.
+
+📌 중요한 규칙:
+- 사용자의 입력 문장에는 반드시 **단 하나의 intent만** 존재한다고 가정해.
+- 복수 intent가 연상되더라도, **가장 중심이 되는 의도 하나만** 선택해.
+- 절대 여러 intent를 동시에 포함하거나 나열하지 마.
+- 반드시 아래 JSON 형식으로만 응답해. 그 외 설명은 절대 포함하지 마.
+- 형식을 어기면 시스템은 너의 응답을 무시하고 fallback 처리를 한다.
+
+응답 형식:
 {
   "intent": "register_project|register_lead|connect_leads|initial_email|followup_email|email_rewrite_request|analyze_email|handle_email_rejection|generate_emails_for_multiple_leads|list_projects|list_leads|unknown",
-  "extracted_params": { "userPrompt": "..." },
+  "extracted_params": {
+    "userPrompt": "사용자가 입력한 전체 문장 그대로"
+  },
   "confidence": 0.0
 }
-설명 없이 JSON만.
-예시:
-"AI 마케팅 사업 시작할거야" → register_project
-"교육용 챗봇 플랫폼 개발 사업 등록해줘" → register_project
-"건설 프로젝트 신규 사업 추진" → register_project
-"삼성전자 기업 등록. 산업은 AI, 담당자 김민수, 이메일 minsu@samsung.com" → register_lead
-"하나은행을 리드로 추가" → register_lead
-"게임회사 넥슨 lead 등록" → register_lead
-"1번 프로젝트에 2,3번 기업 자동 연결" → connect_leads
-"메일 써줘" → initial_email
-"후속 메일 작성" → followup_email
-"이메일 품질 분석해줘" → analyze_email
-"메일 거부 처리해줘" → handle_email_rejection
-"다중 기업에 메일 보내줘" → generate_emails_for_multiple_leads
-"사업 리스트 보여줘" → list_projects
-"기업 리스트 보여줘" → list_leads
-`,
+`.trim()
         },
-        { type: 'text', text: prompt },
+        { type: 'text', text: prompt }
     ];
     try {
         const resultHistories = await agent.conversate(messages);
@@ -57,127 +52,84 @@ export async function analyzePromptAI(prompt) {
                 return parsed;
         }
         catch { }
-        // fallback: 의도 못잡을 때 패턴 분기 (폭넓게!)
-        const lower = prompt.toLowerCase();
-        // 사업 등록 (여러가지 표현)
-        if ((lower.includes('사업') &&
-            (lower.includes('등록') ||
-                lower.includes('추가') ||
-                lower.includes('할거야') ||
-                lower.includes('시작') ||
-                lower.includes('신규') ||
-                lower.includes('추진') ||
-                lower.includes('개발') ||
-                lower.includes('런칭') ||
-                lower.includes('설립') ||
-                lower.includes('오픈') ||
-                lower.includes('시작할게'))) ||
-            lower.includes('사업 시작')) {
-            return {
-                intent: 'register_project',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.8
-            };
-        }
-        // 기업/리드 등록
-        if ((lower.includes('기업') ||
-            lower.includes('회사') ||
-            lower.includes('리드') ||
-            lower.includes('고객')) &&
-            (lower.includes('등록') ||
-                lower.includes('추가') ||
-                lower.includes('lead'))) {
-            return {
-                intent: 'register_lead',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.8
-            };
-        }
-        // 기업-사업 연결
-        if (lower.includes('연결') || lower.includes('auto-connect')) {
-            return {
-                intent: 'connect_leads',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.7
-            };
-        }
-        // 초안 메일
-        if ((lower.includes('메일') && (lower.includes('써') || lower.includes('작성') || lower.includes('초안'))) ||
-            lower.includes('제안 메일')) {
-            if (lower.includes('후속') || lower.includes('follow')) {
-                return {
-                    intent: 'followup_email',
-                    extracted_params: { userPrompt: prompt },
-                    confidence: 0.7
-                };
-            }
-            return {
-                intent: 'initial_email',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.7
-            };
-        }
-        // 이메일 재작성/거부
-        if (lower.includes('다시') ||
-            lower.includes('수정') ||
-            lower.includes('별로') ||
-            lower.includes('재작성') ||
-            lower.includes('고쳐') ||
-            lower.includes('거부')) {
-            return {
-                intent: 'email_rewrite_request',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.7
-            };
-        }
-        // 이메일 품질 분석
-        if (lower.includes('품질') ||
-            lower.includes('분석') ||
-            lower.includes('진단')) {
-            return {
-                intent: 'analyze_email',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.6
-            };
-        }
-        // 다중 메일
-        if ((lower.includes('다중') || lower.includes('여러')) &&
-            (lower.includes('메일') || lower.includes('기업') || lower.includes('리드'))) {
-            return {
-                intent: 'generate_emails_for_multiple_leads',
-                extracted_params: { userPrompt: prompt },
-                confidence: 0.6
-            };
-        }
-        // 리스트 보여줘
-        if ((lower.includes('리스트') || lower.includes('목록') || lower.includes('보여줘') || lower.includes('전체'))) {
-            if (lower.includes('사업') || lower.includes('프로젝트')) {
-                return {
-                    intent: 'list_projects',
-                    extracted_params: { userPrompt: prompt },
-                    confidence: 0.5
-                };
-            }
-            if (lower.includes('기업') || lower.includes('회사') || lower.includes('리드')) {
-                return {
-                    intent: 'list_leads',
-                    extracted_params: { userPrompt: prompt },
-                    confidence: 0.5
-                };
-            }
-        }
-        // 마지막 fallback: unknown
-        return {
-            intent: 'unknown',
-            extracted_params: { userPrompt: prompt },
-            confidence: 0
-        };
+        // fallback으로 넘어감
+        return fallbackInferIntent(prompt);
     }
-    catch (e) {
-        return {
-            intent: 'unknown',
-            extracted_params: { userPrompt: prompt },
-            confidence: 0
-        };
+    catch {
+        return fallbackInferIntent(prompt);
     }
+}
+// fallback 기반 intent 추론기
+function fallbackInferIntent(prompt) {
+    const lower = prompt.toLowerCase();
+    const scoringRules = [
+        {
+            intent: 'register_project',
+            mustInclude: ['사업', '프로젝트'],
+            optional: ['등록', '추가', '시작', '진행', '런칭', '설립', '개발', '추진', '할거야'],
+        },
+        {
+            intent: 'register_lead',
+            mustInclude: ['기업', '회사', '고객', '리드'],
+            optional: ['등록', '추가', 'lead', '담당', '이메일'],
+        },
+        {
+            intent: 'connect_leads',
+            mustInclude: ['연결'],
+            optional: ['기업', '리드', '프로젝트', '사업', 'auto-connect'],
+        },
+        {
+            intent: 'initial_email',
+            mustInclude: ['메일'],
+            optional: ['작성', '써', '초안', '제안'],
+        },
+        {
+            intent: 'followup_email',
+            mustInclude: ['후속'],
+            optional: ['메일', '다시', '보내', 'follow'],
+        },
+        {
+            intent: 'email_rewrite_request',
+            mustInclude: ['메일'],
+            optional: ['다시', '수정', '별로', '재작성', '고쳐', '거부'],
+        },
+        {
+            intent: 'analyze_email',
+            mustInclude: ['분석'],
+            optional: ['품질', '진단', '이메일'],
+        },
+        {
+            intent: 'generate_emails_for_multiple_leads',
+            mustInclude: ['메일'],
+            optional: ['다중', '여러', '기업', '리드'],
+        },
+        {
+            intent: 'list_projects',
+            mustInclude: ['리스트', '목록', '보여줘', '전체'],
+            optional: ['사업', '프로젝트'],
+        },
+        {
+            intent: 'list_leads',
+            mustInclude: ['리스트', '목록', '보여줘', '전체'],
+            optional: ['기업', '리드', '회사', '고객'],
+        },
+    ];
+    let bestIntent = 'unknown';
+    let bestScore = 0;
+    for (const rule of scoringRules) {
+        const hasMust = rule.mustInclude.every(k => lower.includes(k));
+        if (!hasMust)
+            continue;
+        const optionalMatches = rule.optional.filter(k => lower.includes(k)).length;
+        const score = optionalMatches + 1; // must 통과한 경우 base score 1
+        if (score > bestScore) {
+            bestIntent = rule.intent;
+            bestScore = score;
+        }
+    }
+    return {
+        intent: bestIntent,
+        extracted_params: { userPrompt: prompt },
+        confidence: bestIntent === 'unknown' ? 0 : Math.min(0.95, 0.4 + bestScore * 0.1),
+    };
 }

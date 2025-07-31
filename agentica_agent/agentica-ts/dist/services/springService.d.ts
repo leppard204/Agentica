@@ -5,14 +5,22 @@ export declare const springService: {
         industry: string;
     }): Promise<any>;
     listProjects(): Promise<any>;
-    createLead({ companyName, industry, contactEmail, contactName }: {
+    createLead({ companyName, industry, contactEmail, contactName, size, language }: {
         companyName: string;
         industry: string;
         contactEmail: string;
         contactName?: string;
-    }): Promise<any>;
+        size?: string;
+        language?: string;
+    }): Promise<{
+        status: string;
+        data: any;
+    }>;
     listLeads(): Promise<any>;
-    autoConnectLeads(projectId: number): Promise<any>;
+    autoConnectLeadsByNameAndLeads(projectName: string, leadNames: string[]): Promise<{
+        status: string;
+        data: any;
+    }>;
     getProjectById(projectId: number): Promise<any>;
     getLeadById(leadId: number): Promise<any>;
     saveEmail(projectId: number, leadId: number, subject: string, body: string): Promise<any>;
