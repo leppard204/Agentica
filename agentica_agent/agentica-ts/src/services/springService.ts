@@ -15,18 +15,29 @@ export const springService = {
     companyName,
     industry,
     contactEmail,
-    contactName
-  }: { companyName: string; industry: string; contactEmail: string; contactName?: string }) {
-    const res = await axios.post(`${BASE_URL}/leads`, { companyName, industry, contactEmail, contactName });
-    return res.data;
+    contactName,
+    size,        
+    language 
+  }: { companyName: string; industry: string; contactEmail: string; contactName?: string; size?: string; language?: string }) {
+    const res = await axios.post(`${BASE_URL}/leads`, { companyName, industry, contactEmail, contactName, size, language });
+    return {
+    status: 'success',
+    data: res.data,
+  };
   },
   async listLeads() {
     const res = await axios.get(`${BASE_URL}/leads`);
     return res.data;
   },
-  async autoConnectLeads(projectId: number) {
-    const res = await axios.post(`${BASE_URL}/projects/${projectId}/auto-connect`);
-    return res.data;
+  async autoConnectLeadsByNameAndLeads(projectName: string, leadNames: string[]) {
+    const res = await axios.post(`${BASE_URL}/projects/auto-connect-by-name-with-leads`, {
+      projectName,
+      leadNames,
+    });
+    return {
+      status: 'success',
+      data: res.data,
+    };
   },
   async getProjectById(projectId: number) {
     const res = await axios.get(`${BASE_URL}/projects/${projectId}`);
