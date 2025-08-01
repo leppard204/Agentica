@@ -3,14 +3,19 @@ export declare function generateInitialEmail({ userPrompt }: {
 }): Promise<{
     status: string;
     error: string;
-    subject?: undefined;
-    body?: undefined;
-} | {
-    subject: any;
-    body: any;
+} | ({
+    companyName: string;
     status: string;
+    error: string;
+    subject?: undefined;
+    preview?: undefined;
+} | {
+    companyName: string;
+    status: string;
+    subject: any;
+    preview: string;
     error?: undefined;
-}>;
+})[]>;
 export declare function generateFollowupEmail({ userPrompt }: {
     userPrompt: string;
 }): Promise<{

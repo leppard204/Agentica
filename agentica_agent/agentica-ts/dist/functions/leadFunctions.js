@@ -181,7 +181,7 @@ export async function autoConnectLeads({ userPrompt }) {
         }
         // ✅ projectName 정제
         const cleanProjectName = normalizeProjectName(parsed.projectName);
-        return await springService.autoConnectLeadsByNameAndLeads(cleanProjectName, parsed.leadNames);
+        return await springService.autoConnectLeadsByNameAndLeads(parsed.projectName.trim(), parsed.leadNames);
     }
     catch (e) {
         return { status: 'error', error: 'JSON 파싱 실패' };

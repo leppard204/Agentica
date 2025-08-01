@@ -25,8 +25,6 @@ export async function chatbotHandler(input: string) {
       return await emailFuncs.analyzeEmailIssues(extracted_params);
     case 'handle_email_rejection':
       return await emailFuncs.handleEmailRejection(extracted_params);
-    case 'generate_emails_for_multiple_leads':
-      return await emailFuncs.generateEmailsForMultipleLeads(extracted_params);
     case 'list_projects':
       return await projectFuncs.listProjects();
     case 'list_leads':
