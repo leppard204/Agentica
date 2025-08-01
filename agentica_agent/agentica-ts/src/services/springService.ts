@@ -1,5 +1,5 @@
 import axios from 'axios';
-
+import type { Lead } from '../types/index.js';
 const BASE_URL = 'http://localhost:8080';
 
 export const springService = {
@@ -54,6 +54,28 @@ export const springService = {
   async submitFeedback({ emailId, feedbackText }: { emailId: number; feedbackText: string }) {
     const res = await axios.post(`${BASE_URL}/feedbacks`, { emailId, feedbackText });
     return res.data;
+  },
+
+  async getLeadByName(companyName: string): Promise<Lead | null> {
+    const res = await axios.get(`${BASE_URL}/leads`);
+    const leads: Lead[] = res.data;
+
+    return (
+      leads.find(
+        (l) => l.name?.trim().toLowerCase() === companyName.trim().toLowerCase()
+      ) ?? null
+    );
+  },
+
+  async getProjectByName(projectName: string) {
+    const res = await axios.get(`${BASE_URL}/projects`, {
+      params: { name: projectName.trim() }
+    });
+
+    const projects = res.data;
+
+    // 정확히 일치하는 것만 리턴
+    return projects.find((p: any) => p.name.trim() === projectName.trim()) ?? null;
   }
   // 필요시 추가 엔드포인트 여기에 계속 확장
 };

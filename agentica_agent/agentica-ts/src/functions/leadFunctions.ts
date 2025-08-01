@@ -219,7 +219,7 @@ export async function autoConnectLeads({ userPrompt }: { userPrompt: string }) {
     const cleanProjectName = normalizeProjectName(parsed.projectName);
 
     return await springService.autoConnectLeadsByNameAndLeads(
-      cleanProjectName,
+      parsed.projectName.trim(),
       parsed.leadNames
     );
   } catch (e) {

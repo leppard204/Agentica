@@ -1,50 +1,134 @@
 import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
-// 1. 초안 메일 생성
+import { OpenAI } from 'openai';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
 export async function generateInitialEmail({ userPrompt }) {
-    const idPrompt = `
-아래 프롬프트에서 projectId(사업 id), leadId(기업 id)를 추출해.
-반드시 JSON만 반환. 예시: {"projectId":1, "leadId":2}
-`.trim();
-    // ID 추출
-    const idResult = await agent.conversate([
-        { type: 'text', text: idPrompt },
-        { type: 'text', text: userPrompt }
-    ]);
-    const lastId = Array.isArray(idResult) ? idResult[idResult.length - 1] : idResult;
-    const idText = typeof lastId === 'string'
-        ? lastId
-        : lastId.content ?? lastId.text ?? '';
-    const idMatch = idText.match(/\{.*\}/s);
-    if (!idMatch)
-        return { status: 'error', error: 'projectId/leadId 추출 실패' };
-    const { projectId, leadId } = JSON.parse(idMatch[0]);
-    const project = await springService.getProjectById(projectId);
-    const lead = await springService.getLeadById(leadId);
-    const systemPrompt = `
-아래 사업설명과 고객정보를 참고해 맞춤 B2B 세일즈 이메일을 JSON으로만 생성.
-예시: {"subject":"제목", "body":"본문"}
-`.trim();
-    const mailResult = await agent.conversate([
-        { type: 'text', text: systemPrompt },
-        { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}` }
-    ]);
-    const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
-    const mailText = typeof lastMail === 'string'
-        ? lastMail
-        : lastMail.content ?? lastMail.text ?? '';
-    const match = mailText.match(/\{.*\}/s);
-    if (match) {
-        try {
-            const parsed = JSON.parse(match[0]);
-            await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
-            return { subject: parsed.subject, body: parsed.body, status: 'success' };
-        }
-        catch {
-            return { status: 'error', error: '이메일 JSON 파싱 실패' };
+    console.log('📧 이메일 생성 시작:', userPrompt);
+    // 1. OpenAI로 파라미터 추출 (Agentica 사용 안함)
+    const extractPrompt = `
+다음 요청에서 프로젝트명과 기업명들을 JSON으로 추출하세요:
+"${userPrompt}"
+
+정확히 이 형식으로만 답하세요:
+{"projectName": "프로젝트명", "leadNames": ["기업1", "기업2"]}
+`;
+    let extractText;
+    try {
+        const extractResponse = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [{ role: "user", content: extractPrompt }],
+            temperature: 0.1,
+        });
+        extractText = extractResponse.choices[0]?.message?.content || '';
+        console.log('🔥 extractText:', extractText);
+    }
+    catch (error) {
+        console.error('OpenAI 호출 오류:', error);
+        return { status: 'error', error: 'AI 서비스 호출 실패' };
+    }
+    // 2. JSON 파싱
+    const cleaned = extractText.replace(/```json|```/g, '').trim();
+    const match = cleaned.match(/\{.*\}/s);
+    if (!match) {
+        return { status: 'error', error: '파라미터 추출 실패 - JSON 형식을 찾을 수 없음' };
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(match[0]);
+        if (!parsed.projectName || !Array.isArray(parsed.leadNames) || parsed.leadNames.length === 0) {
+            return { status: 'error', error: 'projectName 또는 leadNames가 올바르지 않음' };
         }
     }
-    return { status: 'error', error: '이메일 생성 실패' };
+    catch (error) {
+        console.error('JSON 파싱 오류:', error);
+        return { status: 'error', error: 'JSON 파싱 실패' };
+    }
+    // 3. 프로젝트 조회
+    const project = await springService.getProjectByName(parsed.projectName.trim());
+    if (!project) {
+        return { status: 'error', error: `프로젝트 '${parsed.projectName}' 를 찾을 수 없음` };
+    }
+    // 4. 기업 정보 조회
+    const leadResults = await Promise.all(parsed.leadNames.map(name => springService.getLeadByName(name.trim())));
+    const validLeads = leadResults.filter((l) => Boolean(l));
+    if (validLeads.length === 0) {
+        return { status: 'error', error: '유효한 기업을 찾을 수 없음' };
+    }
+    console.log(`✅ 발견된 기업: ${validLeads.map(l => l.name).join(', ')}`);
+    // 5. 각 기업별로 맞춤 이메일 생성 (OpenAI 직접 호출)
+    const results = [];
+    for (const lead of validLeads) {
+        console.log(`📝 ${lead.name} 맞춤 이메일 생성 중...`);
+        const mailPrompt = `
+당신은 전문 B2B 세일즈 이메일 작성자입니다.
+
+사용자 요청: "${userPrompt}"
+프로젝트 설명: ${project.description}
+
+타겟 고객 정보:
+- 회사명: ${lead.name}
+- 산업분야: ${lead.industry}
+- 담당자: ${lead.contactName || '담당자님'}
+- 회사규모: ${lead.size || '미정'}
+- 언어: ${lead.language || '한국어'}
+
+이 고객의 특성에 맞는 맞춤형 B2B 제안 이메일을 작성하세요.
+해당 산업의 pain point와 우리 솔루션이 어떻게 도움이 될지 구체적으로 설명하세요.
+
+정확히 이 JSON 형식으로만 답하세요:
+{"subject":"이메일 제목","body":"이메일 본문"}
+`;
+        try {
+            const mailResponse = await openai.chat.completions.create({
+                model: "gpt-4o",
+                messages: [{ role: "user", content: mailPrompt }],
+                temperature: 0.7,
+            });
+            const mailText = mailResponse.choices[0]?.message?.content || '';
+            console.log(`[${lead.name} 응답]`, mailText.substring(0, 100) + '...');
+            const mailMatch = mailText.match(/\{.*\}/s);
+            if (!mailMatch) {
+                results.push({
+                    companyName: lead.name,
+                    status: 'error',
+                    error: '이메일 생성 실패 - JSON 형식 오류'
+                });
+                continue;
+            }
+            const parsedMail = JSON.parse(mailMatch[0]);
+            if (!parsedMail.subject || !parsedMail.body) {
+                results.push({
+                    companyName: lead.name,
+                    status: 'error',
+                    error: '제목 또는 본문 누락'
+                });
+                continue;
+            }
+            // 이메일 저장
+            await springService.saveEmail(project.id, lead.id, parsedMail.subject, parsedMail.body);
+            results.push({
+                companyName: lead.name,
+                status: 'success',
+                subject: parsedMail.subject,
+                preview: parsedMail.body.substring(0, 150) + '...'
+            });
+            console.log(`✅ ${lead.name} 이메일 생성 완료: ${parsedMail.subject}`);
+        }
+        catch (error) {
+            console.error(`${lead.name} 이메일 생성 오류:`, error);
+            results.push({
+                companyName: lead.name,
+                status: 'error',
+                error: 'AI 서비스 호출 실패'
+            });
+        }
+    }
+    console.log('🎉 전체 이메일 생성 완료');
+    return results;
 }
 // 2. 후속 메일 생성
 export async function generateFollowupEmail({ userPrompt }) {
