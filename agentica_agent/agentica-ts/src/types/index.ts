@@ -10,11 +10,13 @@ export interface Project {
 
 export interface Lead {
   id: number;
-  companyName: string;
+  name: string;
   industry: string;
   contactEmail: string;
   contactName?: string;
   createdAt: string;
+  size?: string;
+  language?: string;
 }
 
 export interface Email {
@@ -32,3 +34,11 @@ export interface Feedback {
   feedbackText: string;
   createdAt: string;
 }
+
+export type EmailResult = {
+  companyName: string;
+  subject?: string;
+  body?: string;
+  status?: 'error';
+  error?: string;
+};

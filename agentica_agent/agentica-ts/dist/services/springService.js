@@ -45,6 +45,19 @@ export const springService = {
     async submitFeedback({ emailId, feedbackText }) {
         const res = await axios.post(`${BASE_URL}/feedbacks`, { emailId, feedbackText });
         return res.data;
+    },
+    async getLeadByName(companyName) {
+        const res = await axios.get(`${BASE_URL}/leads`);
+        const leads = res.data;
+        return (leads.find((l) => l.name?.trim().toLowerCase() === companyName.trim().toLowerCase()) ?? null);
+    },
+    async getProjectByName(projectName) {
+        const res = await axios.get(`${BASE_URL}/projects`, {
+            params: { name: projectName.trim() }
+        });
+        const projects = res.data;
+        // 정확히 일치하는 것만 리턴
+        return projects.find((p) => p.name.trim() === projectName.trim()) ?? null;
     }
     // 필요시 추가 엔드포인트 여기에 계속 확장
 };

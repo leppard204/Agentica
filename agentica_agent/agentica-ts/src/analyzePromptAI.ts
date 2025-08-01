@@ -10,7 +10,6 @@ const INTENT_LIST = [
   'email_rewrite_request',
   'analyze_email',
   'handle_email_rejection',
-  'generate_emails_for_multiple_leads',
   'list_projects',
   'list_leads',
 ] as const;
@@ -39,7 +38,7 @@ export async function analyzePromptAI(prompt: string): Promise<AnalyzePromptResu
 
 응답 형식:
 {
-  "intent": "register_project|register_lead|connect_leads|initial_email|followup_email|email_rewrite_request|analyze_email|handle_email_rejection|generate_emails_for_multiple_leads|list_projects|list_leads|unknown",
+  "intent": "register_project|register_lead|connect_leads|initial_email|followup_email|email_rewrite_request|analyze_email|handle_email_rejection|list_projects|list_leads|unknown",
   "extracted_params": {
     "userPrompt": "사용자가 입력한 전체 문장 그대로"
   },
@@ -63,7 +62,10 @@ export async function analyzePromptAI(prompt: string): Promise<AnalyzePromptResu
 
     try {
       const parsed = JSON.parse(lastText);
-      if (parsed.intent && INTENT_LIST.includes(parsed.intent)) return parsed;
+      if (parsed.intent && INTENT_LIST.includes(parsed.intent)){
+        console.log('🧠 analyzePromptAI 결과:', JSON.stringify(parsed, null, 2));
+        return parsed;
+      }
     } catch {}
 
     // fallback으로 넘어감
@@ -97,7 +99,7 @@ function fallbackInferIntent(prompt: string): AnalyzePromptResult {
     {
       intent: 'initial_email',
       mustInclude: ['메일'],
-      optional: ['작성', '써', '초안', '제안'],
+      optional: ['작성', '써', '초안', '제안', '보내', '보내줘', '기업', '회사', '소개', '제공', '여러', '다중']
     },
     {
       intent: 'followup_email',
@@ -113,11 +115,6 @@ function fallbackInferIntent(prompt: string): AnalyzePromptResult {
       intent: 'analyze_email',
       mustInclude: ['분석'],
       optional: ['품질', '진단', '이메일'],
-    },
-    {
-      intent: 'generate_emails_for_multiple_leads',
-      mustInclude: ['메일'],
-      optional: ['다중', '여러', '기업', '리드'],
     },
     {
       intent: 'list_projects',
@@ -139,7 +136,7 @@ function fallbackInferIntent(prompt: string): AnalyzePromptResult {
     if (!hasMust) continue;
 
     const optionalMatches = rule.optional.filter(k => lower.includes(k)).length;
-    const score = optionalMatches + 1; // must 통과한 경우 base score 1
+    const score = optionalMatches + 1;
 
     if (score > bestScore) {
       bestIntent = rule.intent;

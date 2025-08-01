@@ -151,6 +151,53 @@ export const agent = new Agentica({
                         output: {
                             anyOf: [
                                 {
+                                    type: "array",
+                                    items: {
+                                        anyOf: [
+                                            {
+                                                type: "object",
+                                                properties: {
+                                                    companyName: {
+                                                        type: "string"
+                                                    },
+                                                    status: {
+                                                        type: "string"
+                                                    },
+                                                    subject: {},
+                                                    preview: {
+                                                        type: "string"
+                                                    }
+                                                },
+                                                required: [
+                                                    "companyName",
+                                                    "status",
+                                                    "subject",
+                                                    "preview"
+                                                ]
+                                            },
+                                            {
+                                                type: "object",
+                                                properties: {
+                                                    companyName: {
+                                                        type: "string"
+                                                    },
+                                                    status: {
+                                                        type: "string"
+                                                    },
+                                                    error: {
+                                                        type: "string"
+                                                    }
+                                                },
+                                                required: [
+                                                    "companyName",
+                                                    "status",
+                                                    "error"
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
                                     type: "object",
                                     properties: {
                                         status: {
@@ -163,21 +210,6 @@ export const agent = new Agentica({
                                     required: [
                                         "status",
                                         "error"
-                                    ]
-                                },
-                                {
-                                    type: "object",
-                                    properties: {
-                                        subject: {},
-                                        body: {},
-                                        status: {
-                                            type: "string"
-                                        }
-                                    },
-                                    required: [
-                                        "subject",
-                                        "body",
-                                        "status"
                                     ]
                                 }
                             ]

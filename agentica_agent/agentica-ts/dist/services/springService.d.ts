@@ -1,3 +1,4 @@
+import type { Lead } from '../types/index.js';
 export declare const springService: {
     createProject({ name, description, industry }: {
         name: string;
@@ -28,4 +29,6 @@ export declare const springService: {
         emailId: number;
         feedbackText: string;
     }): Promise<any>;
+    getLeadByName(companyName: string): Promise<Lead | null>;
+    getProjectByName(projectName: string): Promise<any>;
 };
