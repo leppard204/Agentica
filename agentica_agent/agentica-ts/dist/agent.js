@@ -164,6 +164,14 @@ export const agent = new Agentica({
                                                         type: "string"
                                                     },
                                                     subject: {},
+                                                    body: {},
+                                                    contactEmail: {
+                                                        type: "string"
+                                                    },
+                                                    projectId: {},
+                                                    leadId: {
+                                                        type: "number"
+                                                    },
                                                     preview: {
                                                         type: "string"
                                                     }
@@ -172,6 +180,10 @@ export const agent = new Agentica({
                                                     "companyName",
                                                     "status",
                                                     "subject",
+                                                    "body",
+                                                    "contactEmail",
+                                                    "projectId",
+                                                    "leadId",
                                                     "preview"
                                                 ]
                                             },

@@ -2,6 +2,7 @@ import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
 import { OpenAI } from 'openai';
 import dotenv from 'dotenv';
+import axios from 'axios';
 dotenv.config({ override: true });
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -59,13 +60,14 @@ export async function generateInitialEmail({ userPrompt }) {
         return { status: 'error', error: '유효한 기업을 찾을 수 없음' };
     }
     console.log(`✅ 발견된 기업: ${validLeads.map(l => l.name).join(', ')}`);
-    // 5. 각 기업별로 맞춤 이메일 생성 (OpenAI 직접 호출)
     const results = [];
+    const emailPayloads = [];
+    // 5. 각 기업별로 맞춤 이메일 생성 (OpenAI 직접 호출)
     for (const lead of validLeads) {
         console.log(`📝 ${lead.name} 맞춤 이메일 생성 중...`);
         const mailPrompt = `
 당신은 전문 B2B 세일즈 이메일 작성자입니다.
-
+당사의 이름은 autosales이고 이 메일을 보내는 사람의 이름은 심규성, 연락처 정보는 sks02040204@gmail.com 입니다.
 사용자 요청: "${userPrompt}"
 프로젝트 설명: ${project.description}
 
@@ -108,13 +110,23 @@ export async function generateInitialEmail({ userPrompt }) {
                 });
                 continue;
             }
-            // 이메일 저장
-            await springService.saveEmail(project.id, lead.id, parsedMail.subject, parsedMail.body);
             results.push({
                 companyName: lead.name,
                 status: 'success',
                 subject: parsedMail.subject,
+                body: parsedMail.body,
+                contactEmail: lead.contactEmail,
+                projectId: project.id,
+                leadId: lead.id,
                 preview: parsedMail.body.substring(0, 150) + '...'
+            });
+            // 초안 전송용 배열에도 저장
+            emailPayloads.push({
+                projectId: project.id,
+                leadId: lead.id,
+                subject: parsedMail.subject,
+                body: parsedMail.body,
+                contactEmail: lead.contactEmail,
             });
             console.log(`✅ ${lead.name} 이메일 생성 완료: ${parsedMail.subject}`);
         }
@@ -125,6 +137,16 @@ export async function generateInitialEmail({ userPrompt }) {
                 status: 'error',
                 error: 'AI 서비스 호출 실패'
             });
+        }
+    }
+    // 6. Spring으로 한 번에 전체 메일 초안 전송
+    if (emailPayloads.length > 0) {
+        try {
+            await axios.post('http://localhost:8080/emails/drafts', emailPayloads);
+            console.log('📨 Spring에 이메일 리스트 전송 완료');
+        }
+        catch (error) {
+            console.error('❌ Spring 전송 실패:', error);
         }
     }
     console.log('🎉 전체 이메일 생성 완료');
