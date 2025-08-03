@@ -81,7 +81,6 @@ export async function generateInitialEmail({ userPrompt }: { userPrompt: string 
     
     const mailPrompt = `
 당신은 전문 B2B 세일즈 이메일 작성자입니다.
-당사의 이름은 autosales이고 이 메일을 보내는 사람의 이름은 심규성, 연락처 정보는 sks02040204@gmail.com 입니다.
 사용자 요청: "${userPrompt}"
 프로젝트 설명: ${project.description}
 
@@ -164,8 +163,14 @@ export async function generateInitialEmail({ userPrompt }: { userPrompt: string 
   // 6. Spring으로 한 번에 전체 메일 초안 전송
   if (emailPayloads.length > 0) {
     try {
-      await axios.post('http://localhost:8080/emails/drafts', emailPayloads);
+      const response = await axios.post('http://localhost:8080/emails/drafts', emailPayloads);
       console.log('📨 Spring에 이메일 리스트 전송 완료');
+      const sessionId = response.data.sessionId;
+      if (sessionId) {
+        const url = `http://localhost:8080/emails/drafts?sessionId=${sessionId}`;
+        console.log('📬 초안 확인 페이지:', url);
+        await open(url); // 자동 브라우저 오픈 (CLI 실행 환경일 때만 가능)
+      }
 
     } catch (error) {
       console.error('❌ Spring 전송 실패:', error);
