@@ -32,30 +32,73 @@ export async function submitFeedback({ userPrompt }: { userPrompt: string }) {
 }
 
 // 피드백 요약/분석
-export async function summarizeFeedback({ userPrompt }: { userPrompt: string }) {
-  const systemPrompt = `
-아래 피드백 내용을 한줄로 요약하고, 긍정/중립/부정 중 하나로 분류해 JSON으로만 반환.
-예시: {"summary":"가격이 부담스럽다는 응답", "response_type":"negative"}
-response_type: positive|neutral|negative
+export async function summarizeFeedback({
+  leadName,
+  projectName,
+  subject,
+  body
+}: {
+  leadName: string;
+  projectName: string;
+  subject: string;
+  body: string;
+}) {
+  const prompt = `
+다음은 '${projectName}' 사업에 대해 '${leadName}' 고객이 보낸 회신 이메일입니다.
+
+내용을 정확히 분석해서 아래 두 항목을 정확히 작성하세요:
+
+1. 회신 요약: 핵심 내용을 1~2문장으로 요약하세요.
+2. 응답 유형: 반드시 아래 다섯 가지 중 하나만 골라 소문자로 적으세요
+   - positive
+   - neutral
+   - negative
+   - out-of-office
+   - unreadable
+
+형식 예시:
+1. 제안을 거절하고 정중히 감사 인사를 전함.
+2. negative
+
+제목: ${subject}
+내용:
+${body}
 `.trim();
 
-  const result = await agent.conversate([
-    { type: 'text', text: systemPrompt },
-    { type: 'text', text: userPrompt }
-  ]);
+  const result = await agent.conversate([{ type: 'text', text: prompt }]); // ✅ 여기가 GPT 호출
   const last = Array.isArray(result) ? result[result.length - 1] : result;
-  const lastText =
+  const text =
     typeof last === 'string'
       ? last
       : (last as any).content ?? (last as any).text ?? '';
 
-  const match = lastText.match(/\{.*\}/s);
-  if (match) {
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return { status: 'error', error: '요약 JSON 파싱 실패' };
-    }
+  const match = text.match(/1[.)\-:]?\s*(.+?)\s*2[.)\-:]?\s*(.+)/s);
+  if (!match) {
+    return {
+      status: 'error',
+      error: 'GPT 응답 파싱 실패',
+      raw: text
+    };
   }
-  return { status: 'error', error: '피드백 요약 실패' };
+
+  return {
+    status: 'success',
+    summary: match[1].trim(),
+    responseType: match[2].trim().toLowerCase()
+  };
+}
+
+// 피드백 전체 분석 및 저장 트리거
+export async function handleFeedbackSummary({
+  leadName,
+  projectName,
+  subject,
+  body
+}: {
+  leadName: string;
+  projectName: string;
+  subject: string;
+  body: string;
+}) {
+  return await summarizeFeedback({ leadName, projectName, subject, body });
 }

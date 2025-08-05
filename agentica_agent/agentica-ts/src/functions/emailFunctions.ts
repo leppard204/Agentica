@@ -81,6 +81,7 @@ export async function generateInitialEmail({ userPrompt }: { userPrompt: string 
     
     const mailPrompt = `
 당신은 전문 B2B 세일즈 이메일 작성자입니다.
+당사의 이름은 autosales이고 이 메일을 보내는 사람의 이름은 심규성, 연락처 정보는 sks02040204@gmail.com 입니다. 참고하세요.
 사용자 요청: "${userPrompt}"
 프로젝트 설명: ${project.description}
 

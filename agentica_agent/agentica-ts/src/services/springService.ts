@@ -76,6 +76,32 @@ export const springService = {
 
     // 정확히 일치하는 것만 리턴
     return projects.find((p: any) => p.name.trim() === projectName.trim()) ?? null;
+  },
+
+  async summarizeFeedbackResult({
+    projectId,
+    leadId,
+    emailId,
+    originalText,
+    responseSummary,
+    responseType
+  }: {
+    projectId: number;
+    leadId: number;
+    emailId: number;
+    originalText: string;
+    responseSummary: string;
+    responseType: string;
+  }) {
+    const res = await axios.post(`${BASE_URL}/feedback`, {
+      projectId,
+      leadId,
+      emailId,
+      originalText,
+      responseSummary,
+      responseType
+    });
+    return res.data;
   }
   // 필요시 추가 엔드포인트 여기에 계속 확장
 };

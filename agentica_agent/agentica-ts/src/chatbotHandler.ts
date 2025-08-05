@@ -28,7 +28,7 @@ export async function chatbotHandler(input: string) {
     case 'list_projects':
       return await projectFuncs.listProjects();
     case 'list_leads':
-      return await leadFuncs.listLeads();
+      return await leadFuncs.listLeads();  
     default:
       return { message: '의도를 이해하지 못했습니다.' };
   }

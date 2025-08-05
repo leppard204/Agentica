@@ -89,21 +89,188 @@ export const agent = new Agentica({
                         parameters: {
                             type: "object",
                             properties: {
-                                userPrompt: {
+                                leadName: {
+                                    type: "string"
+                                },
+                                projectName: {
+                                    type: "string"
+                                },
+                                subject: {
+                                    type: "string"
+                                },
+                                body: {
                                     type: "string"
                                 }
                             },
                             required: [
-                                "userPrompt"
+                                "leadName",
+                                "projectName",
+                                "subject",
+                                "body"
                             ],
                             additionalProperties: false,
                             $defs: {}
                         },
-                        output: {},
-                        validate: (() => { const _io0 = input => "string" === typeof input.userPrompt; const _vo0 = (input, _path, _exceptionable = true) => ["string" === typeof input.userPrompt || _report(_exceptionable, {
-                                path: _path + ".userPrompt",
+                        output: {
+                            anyOf: [
+                                {
+                                    type: "object",
+                                    properties: {
+                                        status: {
+                                            type: "string"
+                                        },
+                                        error: {
+                                            type: "string"
+                                        },
+                                        raw: {}
+                                    },
+                                    required: [
+                                        "status",
+                                        "error",
+                                        "raw"
+                                    ]
+                                },
+                                {
+                                    type: "object",
+                                    properties: {
+                                        status: {
+                                            type: "string"
+                                        },
+                                        summary: {},
+                                        responseType: {}
+                                    },
+                                    required: [
+                                        "status",
+                                        "summary",
+                                        "responseType"
+                                    ]
+                                }
+                            ]
+                        },
+                        validate: (() => { const _io0 = input => "string" === typeof input.leadName && "string" === typeof input.projectName && "string" === typeof input.subject && "string" === typeof input.body; const _vo0 = (input, _path, _exceptionable = true) => ["string" === typeof input.leadName || _report(_exceptionable, {
+                                path: _path + ".leadName",
                                 expected: "string",
-                                value: input.userPrompt
+                                value: input.leadName
+                            }), "string" === typeof input.projectName || _report(_exceptionable, {
+                                path: _path + ".projectName",
+                                expected: "string",
+                                value: input.projectName
+                            }), "string" === typeof input.subject || _report(_exceptionable, {
+                                path: _path + ".subject",
+                                expected: "string",
+                                value: input.subject
+                            }), "string" === typeof input.body || _report(_exceptionable, {
+                                path: _path + ".body",
+                                expected: "string",
+                                value: input.body
+                            })].every(flag => flag); const __is = input => "object" === typeof input && null !== input && _io0(input); let errors; let _report; return input => {
+                            if (false === __is(input)) {
+                                errors = [];
+                                _report = __typia_transform__validateReport._validateReport(errors);
+                                ((input, _path, _exceptionable = true) => ("object" === typeof input && null !== input || _report(true, {
+                                    path: _path + "",
+                                    expected: "__type",
+                                    value: input
+                                })) && _vo0(input, _path + "", true) || _report(true, {
+                                    path: _path + "",
+                                    expected: "__type",
+                                    value: input
+                                }))(input, "$input", true);
+                                const success = 0 === errors.length;
+                                return success ? {
+                                    success,
+                                    data: input
+                                } : {
+                                    success,
+                                    errors,
+                                    data: input
+                                };
+                            }
+                            return {
+                                success: true,
+                                data: input
+                            };
+                        }; })()
+                    },
+                    {
+                        name: "handleFeedbackSummary",
+                        parameters: {
+                            type: "object",
+                            properties: {
+                                leadName: {
+                                    type: "string"
+                                },
+                                projectName: {
+                                    type: "string"
+                                },
+                                subject: {
+                                    type: "string"
+                                },
+                                body: {
+                                    type: "string"
+                                }
+                            },
+                            required: [
+                                "leadName",
+                                "projectName",
+                                "subject",
+                                "body"
+                            ],
+                            additionalProperties: false,
+                            $defs: {}
+                        },
+                        output: {
+                            anyOf: [
+                                {
+                                    type: "object",
+                                    properties: {
+                                        status: {
+                                            type: "string"
+                                        },
+                                        error: {
+                                            type: "string"
+                                        },
+                                        raw: {}
+                                    },
+                                    required: [
+                                        "status",
+                                        "error",
+                                        "raw"
+                                    ]
+                                },
+                                {
+                                    type: "object",
+                                    properties: {
+                                        status: {
+                                            type: "string"
+                                        },
+                                        summary: {},
+                                        responseType: {}
+                                    },
+                                    required: [
+                                        "status",
+                                        "summary",
+                                        "responseType"
+                                    ]
+                                }
+                            ]
+                        },
+                        validate: (() => { const _io0 = input => "string" === typeof input.leadName && "string" === typeof input.projectName && "string" === typeof input.subject && "string" === typeof input.body; const _vo0 = (input, _path, _exceptionable = true) => ["string" === typeof input.leadName || _report(_exceptionable, {
+                                path: _path + ".leadName",
+                                expected: "string",
+                                value: input.leadName
+                            }), "string" === typeof input.projectName || _report(_exceptionable, {
+                                path: _path + ".projectName",
+                                expected: "string",
+                                value: input.projectName
+                            }), "string" === typeof input.subject || _report(_exceptionable, {
+                                path: _path + ".subject",
+                                expected: "string",
+                                value: input.subject
+                            }), "string" === typeof input.body || _report(_exceptionable, {
+                                path: _path + ".body",
+                                expected: "string",
+                                value: input.body
                             })].every(flag => flag); const __is = input => "object" === typeof input && null !== input && _io0(input); let errors; let _report; return input => {
                             if (false === __is(input)) {
                                 errors = [];
