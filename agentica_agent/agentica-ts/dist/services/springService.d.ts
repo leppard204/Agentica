@@ -31,4 +31,12 @@ export declare const springService: {
     }): Promise<any>;
     getLeadByName(companyName: string): Promise<Lead | null>;
     getProjectByName(projectName: string): Promise<any>;
+    summarizeFeedbackResult({ projectId, leadId, emailId, originalText, responseSummary, responseType }: {
+        projectId: number;
+        leadId: number;
+        emailId: number;
+        originalText: string;
+        responseSummary: string;
+        responseType: string;
+    }): Promise<any>;
 };
