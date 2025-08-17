@@ -2,8 +2,6 @@ import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
 import { OpenAI } from 'openai';
 import dotenv from 'dotenv';
-import axios from 'axios';
-import open from 'open';
 dotenv.config({ override: true });
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -159,22 +157,6 @@ ${idx + 1}.
                 status: 'error',
                 error: 'AI 호출 실패'
             }));
-        }
-    }
-    // 6. Spring으로 한 번에 전송
-    if (emailPayloads.length > 0) {
-        try {
-            const response = await axios.post('http://localhost:8080/emails/drafts', emailPayloads);
-            console.log('📨 Spring에 이메일 리스트 전송 완료');
-            const sessionId = response.data.sessionId;
-            if (sessionId) {
-                const url = `http://localhost:8080/emails/drafts?sessionId=${sessionId}`;
-                console.log('📬 초안 확인 페이지:', url);
-                await open(url);
-            }
-        }
-        catch (error) {
-            console.error('❌ Spring 전송 실패:', error);
         }
     }
     console.log('🎉 전체 이메일 생성 완료');
