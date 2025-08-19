@@ -79,13 +79,13 @@ export async function generateInitialEmail({ userPrompt }: { userPrompt: string 
 
   const results: Array<any> = [];
   const emailPayloads: Array<any> = [];
-
+  const identity = await springService.getIdentity();
   // 5. 마이크로 배치로 메일 생성
   const leadGroups = chunk(validLeads, 4); // 3~5로 조절 가능
   for (const group of leadGroups) {
     const mailPrompt = `
 당신은 전문 B2B 세일즈 이메일 작성자입니다.
-당사의 이름은 autosales이고 이 메일을 보내는 사람의 이름은 심규성, 연락처 정보는 sks02040204@gmail.com 입니다.
+당사의 이름은 ${identity.companyName}이고 이 메일을 보내는 사람의 이름은 ${identity.senderName}, 연락처 정보는 ${identity.senderEmail} 입니다.
 사용자 요청: "${userPrompt}"
 프로젝트 설명: ${project.description}
 

@@ -40,4 +40,9 @@ export declare const springService: {
         responseType: string;
     }): Promise<any>;
     saveEmailToSession(emailData: any): Promise<any>;
+    getIdentity(): Promise<{
+        companyName: string;
+        senderName: string;
+        senderEmail: string;
+    }>;
 };

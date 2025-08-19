@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { Lead } from '../types/index.js';
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = process.env.SPRING_BASE_URL ?? 'http://localhost:8080';;
 
 export const springService = {
   async createProject({ name, description, industry }: { name: string; description: string; industry: string }) {
@@ -106,6 +106,14 @@ export const springService = {
   async saveEmailToSession(emailData: any) {
     const res = await axios.post(`${BASE_URL}/emails/save-to-session`, emailData);
     return res.data;
-  }
+  },
+  async getIdentity() {
+    const res = await axios.get(`${BASE_URL}/settings/identity`);
+    return res.data as {
+      companyName: string;
+      senderName: string;
+      senderEmail: string;
+    };
+  },
   // 필요시 추가 엔드포인트 여기에 계속 확장
 };
