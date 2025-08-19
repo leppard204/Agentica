@@ -1,6 +1,7 @@
 // server.ts
 import express from 'express';
 import feedbackRouter from './routes/feedbackRouter.js';
+import chatbotRouter from './routes/chatbotRouter.js';
 import { analyzePromptAI } from './analyzePromptAI.js';
 import { chatbotHandler } from './chatbotHandler.js'; 
 
@@ -11,6 +12,7 @@ app.use(express.json());
 
 // 라우터 등록
 app.use('/feedback', feedbackRouter);
+app.use('/chatbot', chatbotRouter);
 
 // Spring이 호출하는 엔드포인트
 app.post('/agent/handle', async (req, res) => {

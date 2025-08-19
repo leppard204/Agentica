@@ -164,89 +164,267 @@ ${idx + 1}.
 }
 // 2. 후속 메일 생성
 export async function generateFollowupEmail({ userPrompt }) {
-    const idPrompt = `
-아래 프롬프트에서 projectId, leadId, feedbackSummary(고객 피드백 요약)를 추출해.
-예시: {"projectId":1, "leadId":2, "feedbackSummary":"가격이 비싸다고 응답"}
+    console.log('📧 Follow-up Email 생성 시작:', userPrompt);
+    // 직접 파싱 시도 (후속메일요청 projectId=3 leadId=5 형식)
+    const directMatch = userPrompt.match(/후속메일요청 projectId=(\d+) leadId=(\d+) originalEmailId=([^ ]+) followupReason="([^"]*?)"/);
+    let projectId, leadId, originalEmailId, followupReason;
+    if (directMatch) {
+        try {
+            projectId = parseInt(directMatch[1]);
+            leadId = parseInt(directMatch[2]);
+            originalEmailId = directMatch[3];
+            followupReason = directMatch[4];
+            console.log('✅ 직접 파싱 성공');
+        }
+        catch (parseError) {
+            console.error('직접 파싱 실패:', parseError);
+            return { status: 'error', error: '직접 파싱 실패' };
+        }
+    }
+    else {
+        console.log('🔄 AI 파싱으로 fallback');
+        // AI를 통한 파라미터 추출
+        const paramPrompt = `
+아래 프롬프트에서 projectId, leadId, originalEmailId, followupReason을 추출해.
+예시: {"projectId":1, "leadId":2, "originalEmailId":"uuid123", "followupReason":"일반적인 후속 메일"}
 `.trim();
-    const idResult = await agent.conversate([
-        { type: 'text', text: idPrompt },
-        { type: 'text', text: userPrompt }
-    ]);
-    const lastId = Array.isArray(idResult) ? idResult[idResult.length - 1] : idResult;
-    const idText = typeof lastId === 'string'
-        ? lastId
-        : lastId.content ?? lastId.text ?? '';
-    const idMatch = idText.match(/\{.*\}/s);
-    if (!idMatch)
-        return { status: 'error', error: '파라미터 추출 실패' };
-    const { projectId, leadId, feedbackSummary } = JSON.parse(idMatch[0]);
+        const paramResult = await agent.conversate([
+            { type: 'text', text: paramPrompt },
+            { type: 'text', text: userPrompt }
+        ], {
+            tool_choice: 'none',
+            response_format: { type: 'json_object' },
+            newSession: true
+        });
+        const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
+        const paramText = typeof lastParam === 'string'
+            ? lastParam
+            : lastParam.content ?? lastParam.text ?? '';
+        const paramMatch = paramText.match(/\{.*\}/s);
+        if (!paramMatch)
+            return { status: 'error', error: '파라미터 추출 실패' };
+        try {
+            const parsed = JSON.parse(paramMatch[0]);
+            projectId = parsed.projectId;
+            leadId = parsed.leadId;
+            originalEmailId = parsed.originalEmailId;
+            followupReason = parsed.followupReason;
+            if (!projectId || !leadId || !originalEmailId) {
+                return { status: 'error', error: '필수 파라미터 누락' };
+            }
+        }
+        catch (parseError) {
+            console.error('파라미터 JSON 파싱 오류:', parseError);
+            return { status: 'error', error: '파라미터 파싱 실패' };
+        }
+    }
     const project = await springService.getProjectById(projectId);
+    if (!project) {
+        return { status: 'error', error: `프로젝트 ID ${projectId}를 찾을 수 없습니다.` };
+    }
     const lead = await springService.getLeadById(leadId);
+    if (!lead) {
+        return { status: 'error', error: `리드 ID ${leadId}를 찾을 수 없습니다.` };
+    }
     const systemPrompt = `
-피드백, 사업설명, 고객정보를 참고해 후속 B2B 세일즈 이메일을 JSON으로만 생성.
-예시: {"subject":"제목", "body":"본문"}
+🚨 CRITICAL: YOU MUST RESPOND WITH ONLY JSON FORMAT. NO OTHER TEXT OR EXPLANATIONS.
+
+원본 이메일을 참고하여 후속 B2B 세일즈 이메일을 JSON 형식으로만 생성하세요.
+
+REQUIRED FORMAT:
+{"subject":"후속 제목", "body":"후속 본문"}
+
+EXAMPLE:
+{"subject":"AI 로봇 스마트팜 협력 제안 - 추가 정보", "body":"안녕하세요, 담당자님.\n\n이전에 보내드린 제안서에 대해 추가적인 정보를 제공드리고자 합니다..."}
+
+RULES:
+1. ONLY JSON format allowed
+2. NO explanations, NO descriptions, NO other text
+3. MUST include both "subject" and "body"
+4. If you cannot create JSON, respond with: {"subject":"ERROR", "body":"ERROR"}
+5. 후속 메일이므로 원본 이메일의 맥락을 이어가되, 새로운 정보나 제안을 포함
+
+START YOUR RESPONSE WITH { AND END WITH }
 `.trim();
-    const mailResult = await agent.conversate([
-        { type: 'text', text: systemPrompt },
-        { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n피드백: ${feedbackSummary}` }
-    ]);
+    let mailResult;
+    let retryCount = 0;
+    const maxRetries = 3;
+    while (retryCount <= maxRetries) {
+        try {
+            console.log(`🔄 AI Follow-up Email 생성 시도 ${retryCount + 1}/${maxRetries + 1}`);
+            console.log(`📝 전송할 프롬프트:`, systemPrompt);
+            console.log(`📝 전송할 데이터:`, `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n후속 사유: ${followupReason}`);
+            mailResult = await agent.conversate([
+                { type: 'text', text: systemPrompt },
+                { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n후속 사유: ${followupReason}` }
+            ], { tool_choice: 'none', response_format: { type: 'json_object' }, newSession: true });
+            break; // 성공하면 루프 탈출
+        }
+        catch (error) {
+            retryCount++;
+            if (error.code === 'rate_limit_exceeded' && retryCount <= maxRetries) {
+                const retryAfter = error.headers?.['retry-after-ms'] || 15000;
+                const waitTime = Math.max(parseInt(retryAfter), 15000);
+                console.log(`⏳ Rate limit 도달 (${retryCount}/${maxRetries}), ${waitTime / 1000}초 후 재시도...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+            else {
+                console.error(`❌ 최대 재시도 횟수 초과 또는 다른 오류:`, error);
+                throw error;
+            }
+        }
+    }
     const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
     const mailText = typeof lastMail === 'string'
         ? lastMail
         : lastMail.content ?? lastMail.text ?? '';
+    console.log('🔄 AI Follow-up Email 응답:', mailText);
+    console.log('🔄 AI 응답 길이:', mailText.length);
     const match = mailText.match(/\{.*\}/s);
+    console.log('🔄 JSON 매치 결과:', match ? '성공' : '실패');
     if (match) {
         try {
             const parsed = JSON.parse(match[0]);
-            await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
+            console.log('✅ Follow-up Email 생성 완료');
             return { subject: parsed.subject, body: parsed.body, status: 'success' };
         }
-        catch {
-            return { status: 'error', error: '후속 이메일 JSON 파싱 실패' };
+        catch (error) {
+            console.error('Follow-up Email JSON 파싱 실패:', error);
+            return { status: 'error', error: 'Follow-up Email JSON 파싱 실패' };
         }
     }
-    return { status: 'error', error: '후속 이메일 생성 실패' };
+    return { status: 'error', error: 'Follow-up Email 생성 실패' };
 }
 // 3. 이메일 재작성 (피드백 기반)
 export async function regenerateEmailWithFeedback({ userPrompt }) {
-    const paramPrompt = `
+    console.log('🔄 regenerateEmailWithFeedback 시작:', userPrompt);
+    // 직접 파싱 시도 (재작성요청 projectId=3 leadId=5 형식)
+    const directMatch = userPrompt.match(/재작성요청 projectId=(\d+) leadId=(\d+) originalEmail=(\{.*?\}) userFeedback="([^"]*?)"/);
+    let projectId, leadId, originalEmail, userFeedback;
+    if (directMatch) {
+        try {
+            projectId = parseInt(directMatch[1]);
+            leadId = parseInt(directMatch[2]);
+            // JSON 문자열 정리: 개행문자와 따옴표 이스케이프 처리
+            let jsonStr = directMatch[3];
+            // 개행문자를 이스케이프된 형태로 변환
+            jsonStr = jsonStr.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+            // 따옴표 이스케이프 확인
+            jsonStr = jsonStr.replace(/"/g, '\\"').replace(/\\"/g, '"');
+            originalEmail = JSON.parse(jsonStr);
+            userFeedback = directMatch[4];
+            console.log('✅ 직접 파싱 성공');
+        }
+        catch (parseError) {
+            console.error('직접 파싱 실패:', parseError);
+            return { status: 'error', error: '직접 파싱 실패' };
+        }
+    }
+    else {
+        console.log('🔄 AI 파싱으로 fallback');
+        // AI를 통한 파라미터 추출 (기존 방식)
+        const paramPrompt = `
 아래 프롬프트에서 projectId, leadId, originalEmail(제목/본문), userFeedback을 추출해.
 예시: {"projectId":1, "leadId":2, "originalEmail":{"subject":"...","body":"..."},"userFeedback":"별로라고 함"}
 `.trim();
-    const paramResult = await agent.conversate([
-        { type: 'text', text: paramPrompt },
-        { type: 'text', text: userPrompt }
-    ]);
-    const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
-    const paramText = typeof lastParam === 'string'
-        ? lastParam
-        : lastParam.content ?? lastParam.text ?? '';
-    const paramMatch = paramText.match(/\{.*\}/s);
-    if (!paramMatch)
-        return { status: 'error', error: '파라미터 추출 실패' };
-    const { projectId, leadId, originalEmail, userFeedback } = JSON.parse(paramMatch[0]);
+        const paramResult = await agent.conversate([
+            { type: 'text', text: paramPrompt },
+            { type: 'text', text: userPrompt }
+        ], { tool_choice: 'none', response_format: { type: 'json_object' }, newSession: true });
+        const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
+        const paramText = typeof lastParam === 'string'
+            ? lastParam
+            : lastParam.content ?? lastParam.text ?? '';
+        const paramMatch = paramText.match(/\{.*\}/s);
+        if (!paramMatch)
+            return { status: 'error', error: '파라미터 추출 실패' };
+        try {
+            const parsed = JSON.parse(paramMatch[0]);
+            projectId = parsed.projectId;
+            leadId = parsed.leadId;
+            originalEmail = parsed.originalEmail;
+            userFeedback = parsed.userFeedback;
+            if (!projectId || !leadId || !originalEmail || !userFeedback) {
+                return { status: 'error', error: '필수 파라미터 누락' };
+            }
+        }
+        catch (parseError) {
+            console.error('파라미터 JSON 파싱 오류:', parseError);
+            return { status: 'error', error: '파라미터 파싱 실패' };
+        }
+    }
     const project = await springService.getProjectById(projectId);
+    if (!project) {
+        return { status: 'error', error: `프로젝트 ID ${projectId}를 찾을 수 없습니다.` };
+    }
     const lead = await springService.getLeadById(leadId);
+    if (!lead) {
+        return { status: 'error', error: `리드 ID ${leadId}를 찾을 수 없습니다.` };
+    }
     const systemPrompt = `
-아래 정보(사업/고객/원본이메일/피드백)를 참고해 개선된 이메일을 JSON으로만 재작성.
-예시: {"subject":"개선된 제목", "body":"개선된 본문"}
+🚨 CRITICAL: YOU MUST RESPOND WITH ONLY JSON FORMAT. NO OTHER TEXT OR EXPLANATIONS.
+
+사용자 피드백에 따라 원본 이메일을 개선하여 JSON 형식으로만 응답하세요.
+
+REQUIRED FORMAT:
+{"subject":"개선된 제목", "body":"개선된 본문"}
+
+EXAMPLE:
+{"subject":"AI 로봇 스마트팜 협력 제안 및 구체적 정보", "body":"안녕하세요, 담당자님.\n\n저는 autosales의 심규성입니다. 저희는 AI 로봇을 활용한 스마트팜 솔루션을 개발하고 있으며..."}
+
+RULES:
+1. ONLY JSON format allowed
+2. NO explanations, NO descriptions, NO other text
+3. MUST include both "subject" and "body"
+4. If you cannot create JSON, respond with: {"subject":"ERROR", "body":"ERROR"}
+
+START YOUR RESPONSE WITH { AND END WITH }
 `.trim();
-    const mailResult = await agent.conversate([
-        { type: 'text', text: systemPrompt },
-        { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}` }
-    ]);
+    let mailResult;
+    let retryCount = 0;
+    const maxRetries = 3;
+    while (retryCount <= maxRetries) {
+        try {
+            console.log(`🔄 AI 이메일 재작성 시도 ${retryCount + 1}/${maxRetries + 1}`);
+            console.log(`📝 전송할 프롬프트:`, systemPrompt);
+            console.log(`📝 전송할 데이터:`, `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}`);
+            mailResult = await agent.conversate([
+                { type: 'text', text: systemPrompt },
+                { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}` }
+            ], { tool_choice: 'none', response_format: { type: 'json_object' }, newSession: true });
+            break; // 성공하면 루프 탈출
+        }
+        catch (error) {
+            retryCount++;
+            if (error.code === 'rate_limit_exceeded' && retryCount <= maxRetries) {
+                // Rate Limit 헤더에서 대기 시간 추출 (기본값: 15초)
+                const retryAfter = error.headers?.['retry-after-ms'] || 15000;
+                const waitTime = Math.max(parseInt(retryAfter), 15000); // 최소 15초
+                console.log(`⏳ Rate limit 도달 (${retryCount}/${maxRetries}), ${waitTime / 1000}초 후 재시도...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+            else {
+                console.error(`❌ 최대 재시도 횟수 초과 또는 다른 오류:`, error);
+                throw error;
+            }
+        }
+    }
     const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
     const mailText = typeof lastMail === 'string'
         ? lastMail
         : lastMail.content ?? lastMail.text ?? '';
+    console.log('🔄 AI 이메일 재작성 응답:', mailText);
+    console.log('🔄 AI 응답 길이:', mailText.length);
     const match = mailText.match(/\{.*\}/s);
+    console.log('🔄 JSON 매치 결과:', match ? '성공' : '실패');
     if (match) {
         try {
             const parsed = JSON.parse(match[0]);
-            await springService.saveEmail(projectId, leadId, parsed.subject, parsed.body);
+            // DB에 저장
             return { subject: parsed.subject, body: parsed.body, status: 'success' };
         }
-        catch {
+        catch (error) {
+            console.error('재작성 이메일 저장 실패:', error);
             return { status: 'error', error: '재작성 JSON 파싱 실패' };
         }
     }
@@ -261,7 +439,7 @@ export async function analyzeEmailIssues({ userPrompt }) {
     const paramResult = await agent.conversate([
         { type: 'text', text: paramPrompt },
         { type: 'text', text: userPrompt }
-    ]);
+    ], { tool_choice: 'none', response_format: { type: 'json_object' }, newSession: true });
     const lastParam = Array.isArray(paramResult) ? paramResult[paramResult.length - 1] : paramResult;
     const paramText = typeof lastParam === 'string'
         ? lastParam
@@ -278,7 +456,7 @@ priority: high|medium|low
     const mailResult = await agent.conversate([
         { type: 'text', text: systemPrompt },
         { type: 'text', text: `이메일 내용:\n제목: ${emailContent.subject}\n본문: ${emailContent.body}\n사용자 피드백: ${userFeedback}` }
-    ]);
+    ], { tool_choice: 'none', response_format: { type: 'json_object' }, newSession: true });
     const lastMail = Array.isArray(mailResult) ? mailResult[mailResult.length - 1] : mailResult;
     const mailText = typeof lastMail === 'string'
         ? lastMail
@@ -294,19 +472,34 @@ priority: high|medium|low
     }
     return { status: 'error', error: '이메일 분석 실패' };
 }
-// 5. 이메일 거부 처리 (분석 후 분기)
+// 5. 통합된 이메일 재작성 처리 (거부/취소 모두 처리)
 export async function handleEmailRejection({ userPrompt }) {
-    // 품질 분석 먼저
-    const analysis = await analyzeEmailIssues({ userPrompt });
-    // 심각하면 재작성, 아니면 개선안 안내
-    if (analysis.priority === 'high' || (analysis.issues && analysis.issues.length > 2)) {
+    console.log('🔄 통합 이메일 재작성 처리 시작:', userPrompt);
+    // 발송 취소 요청인지 확인 (재작성요청 키워드)
+    const isCancelRequest = userPrompt.includes('재작성요청');
+    if (isCancelRequest) {
+        console.log('✅ 발송 취소 요청 감지 - 즉시 재작성 진행');
+        // 발송 취소는 즉시 재작성
         return await regenerateEmailWithFeedback({ userPrompt });
     }
-    return {
-        action: 'improve',
-        analysis,
-        message: '분석 결과를 참고하여 이메일을 개선하세요.'
-    };
+    else {
+        console.log('✅ 이메일 거부/거절 요청 감지 - 분석 후 재작성 여부 결정');
+        // 이메일 거부/거절은 분석 후 재작성 여부 결정
+        const analysis = await analyzeEmailIssues({ userPrompt });
+        // 심각하면 재작성, 아니면 개선안 안내
+        if (analysis.priority === 'high' || (analysis.issues && analysis.issues.length > 2)) {
+            console.log('🔴 심각한 문제 감지 - 재작성 진행');
+            return await regenerateEmailWithFeedback({ userPrompt });
+        }
+        else {
+            console.log('🟡 경미한 문제 감지 - 개선안 안내');
+            return {
+                action: 'improve',
+                analysis,
+                message: '분석 결과를 참고하여 이메일을 개선하세요.'
+            };
+        }
+    }
 }
 // 6. 다중 기업용 메일 일괄 생성
 export async function generateEmailsForMultipleLeads({ userPrompt }) {

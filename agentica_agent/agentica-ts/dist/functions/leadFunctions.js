@@ -1,21 +1,18 @@
 import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
 const INDUSTRY_KEYWORDS = {
-    'ai': 'AI',
-    '인공지능': 'AI',
-    'it': 'IT',
-    '정보통신': 'IT',
+    'ai': 'AI', '에이아이': 'AI', 'ai계열': 'AI', '인공지능': 'AI',
+    'it': 'IT', 'it계열': 'IT', '아이티': 'IT', '정보통신': 'IT',
     '금융': '금융',
     '마케팅': '마케팅',
-    '헬스케어': '헬스케어',
-    '의료': '헬스케어',
+    '헬스케어': '헬스케어', '의료': '헬스케어',
     '교육': '교육',
     '게임': '게임',
-    '커머스': '커머스',
-    '쇼핑': '커머스',
+    '커머스': '커머스', '쇼핑': '커머스',
     '전자': '전자',
     '자동차': '자동차',
     '건설': '건설',
+    '환경': '환경',
 };
 const SIZE_KEYWORDS = {
     '대기업': '대기업',
@@ -54,10 +51,20 @@ function inferLanguageFromText(text) {
     return null;
 }
 function extractManually(input) {
+    // 3단계로 회사명 시도
+    // 1) “기업/회사/… 이름은|명은 …”
+    const nameByLabel = input.match(/(?:기업|회사|고객|리드)?\s*(?:이름|명)\s*(?:은|이|가|:)\s*["“]?([가-힣a-zA-Z0-9 .&()\-]{2,40})["”]?/)?.[1];
+    // 2) 따옴표로 둘러싼 텍스트
+    const nameByQuote = input.match(/["“]([가-힣a-zA-Z0-9 .&()\-]{2,40})["”]/)?.[1];
+    // 3) 규모/산업 키워드 앞의 토큰
+    const nameByContext = input.match(/([가-힣a-zA-Z0-9 .&()\-]{2,40})\s*(?=(?:이|가)?\s*(?:대기업|중견|스타트업|소기업|it|ai|인공지능|정보통신|커머스))/i)?.[1];
+    // 담당자: ‘담당자+조사(은|는|이|가|:)’ 허용 + 공백 옵션
+    const contactName = input.match(/담당자(?:는|은|이|가|:)?\s*([가-힣]{2,4})/)?.[1] ?? null;
+    const contactEmail = input.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,})/)?.[1] ?? null;
     return {
-        name: input.match(/([가-힣a-zA-Z0-9\s]{2,})(?=\s*(?:을|를)\s*(?:기업|회사|고객|리드)?\s*(?:으로)?\s*(?:등록|추가|넣|지정)?)/)?.[1]?.trim() ?? null,
-        contactName: input.match(/(?:담당자|담당은|담당자가)\s*([가-힣]+)/)?.[1] ?? null,
-        contactEmail: input.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,})/)?.[1] ?? null,
+        name: (nameByLabel ?? nameByQuote ?? nameByContext ?? null)?.trim() ?? null,
+        contactName,
+        contactEmail,
         industry: inferIndustryFromText(input),
         size: inferSizeFromText(input),
         language: inferLanguageFromText(input),
@@ -79,7 +86,10 @@ export async function createLead({ userPrompt }) {
 
 규칙:
 - 설명 문장 절대 포함하지 말 것
-- 누락된 정보는 일반적인 기준으로 추정해서 반드시 포함 (단, 알 수 없으면 null 사용)
+- 누락된 정보는 일반적인 기준으로 추정해서 반드시 포함 (단, 알 수 없으면 null이고 name과 contactEmail, contactName은 반드시 있어야 함)
+- name은 반드시 기업명이어야 하고, "기업", "회사", "고객", "리드" 등의 단어가 포함되면 안됨.
+- contactEmail은 반드시 이메일 형식이어야 함.
+- name, contactName, contactEmail가 파악이 안되면 한번더 추출 시도
 - industry는 반드시 다음 중 하나:
 ["AI", "IT", "금융", "마케팅", "헬스케어", "교육", "게임", "커머스", "자동차", "건설", "환경","기타"]
 
