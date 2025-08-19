@@ -25,7 +25,7 @@ export const agent = new Agentica({
   model: "chatgpt",
   vendor: {
     api: openai,
-    model: "gpt-4o"
+    model: "gpt-5"
   },
   controllers: [
     {
