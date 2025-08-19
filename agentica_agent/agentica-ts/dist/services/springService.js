@@ -1,5 +1,6 @@
 import axios from 'axios';
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = process.env.SPRING_BASE_URL ?? 'http://localhost:8080';
+;
 export const springService = {
     async createProject({ name, description, industry }) {
         const res = await axios.post(`${BASE_URL}/projects`, { name, description, industry });
