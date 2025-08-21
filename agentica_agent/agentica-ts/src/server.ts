@@ -20,20 +20,26 @@ app.post('/agent/handle', async (req, res) => {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   try {
-    // ✅ chatbotHandler에서 intent 포함한 결과 받음
+    //intent결과 받음
     const result = await chatbotHandler(prompt);
     
     const resp: any = {
-      intent: result.intent, // ✅ fallback에서 분류한 intent도 포함됨!
+      intent: result.intent, 
       text: result?.message ?? result?.text ?? (result.intent === 'unknown' ? '인텐트 불명' : `${result.intent} 완료`),
     };
-
-    // ✅ 특정 intent별 추가 데이터 첨부
+    
+    //특정 intent별 추가 데이터 첨부
     if (result.intent === 'initial_email' && Array.isArray(result?.data)) {
       resp.drafts = result.data;
     }
     if (result.intent === 'register_project' && result?.project) {
-      resp.project = result.project;
+      const p = result.project;
+      resp.text = `프로젝트 "${p.name}" 등록 완료\n설명: ${p.description}\n산업: ${p.industry}`;
+    }
+
+    if (result.intent === 'register_lead' && result?.lead) {
+      const l = result.lead;
+      resp.text = `리드 "${l.companyName}" 등록 완료\n담당자: ${l.contactName}\n이메일: ${l.contactEmail}\n산업: ${l.industry}`;
     }
 
     return res.json(resp);

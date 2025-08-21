@@ -1,6 +1,7 @@
 // functions/projectFunctions.ts
 import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
+import { Project } from '../types/index.js';
 
 export async function createProject({ userPrompt }: { userPrompt: string }) {
   const systemPrompt = `
@@ -10,6 +11,7 @@ export async function createProject({ userPrompt }: { userPrompt: string }) {
 - description은 사용자가 입력한 내용 포함하되, JSON에서 유효하도록 모든 줄바꿈은 \\n, 따옴표(")는 \\\" 로 이스케이프할 것.
 - description은 어느정도 요약하되 전체 내용을 포함해서 정제해줘. 해당 필드는 사업에 대한 설명에 대한 필드니까 꼼꼼하게 작성할 것.
 - industry는 아래 리스트 중 하나로만 선택, 전체 프롬프트를 읽고 가장 적합한 것을 선택해.:
+- 한글로 작성할 것.
 ["AI", "금융", "마케팅", "헬스케어", "교육", "게임", "커머스", "자동차", "건설", "환경","기타"]
 
 반드시 JSON만 반환하며, 추가 설명을 붙이지 말 것.
@@ -35,8 +37,11 @@ export async function createProject({ userPrompt }: { userPrompt: string }) {
     try {
       const parsed = JSON.parse(match[0]);
       if (!parsed.name) return { status: 'error', error: '사업명(name) 추출 실패' };
-      console.log('🛠 DEBUG — createProject 추출 결과:', parsed);
-      return await springService.createProject(parsed);
+      console.log('DEBUG — createProject 추출 결과:', parsed);
+      await springService.createProject(parsed);
+      return {
+        project: parsed as Project
+      };
     } catch {
       return { status: 'error', error: 'JSON 파싱 실패' };
     }

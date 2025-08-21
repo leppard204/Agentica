@@ -13,7 +13,7 @@ function chunk(arr, size = 4) {
     return out;
 }
 export async function generateInitialEmail({ userPrompt }) {
-    console.log('📧 이메일 생성 시작:', userPrompt);
+    console.log('이메일 생성 시작:', userPrompt);
     // 1. OpenAI로 파라미터 추출
     const extractPrompt = `
 다음 요청에서 프로젝트명과 기업명들을 JSON으로 추출하세요:
@@ -30,7 +30,7 @@ export async function generateInitialEmail({ userPrompt }) {
             temperature: 0.1,
         });
         extractText = extractResponse.choices[0]?.message?.content || '';
-        console.log('🔥 extractText:', extractText);
+        console.log('extractText:', extractText);
     }
     catch (error) {
         console.error('OpenAI 호출 오류:', error);
@@ -64,7 +64,7 @@ export async function generateInitialEmail({ userPrompt }) {
     if (validLeads.length === 0) {
         return [{ status: 'error', error: '유효한 기업을 찾을 수 없음' }];
     }
-    console.log(`✅ 발견된 기업: ${validLeads.map(l => l.name).join(', ')}`);
+    console.log(`발견된 기업: ${validLeads.map(l => l.name).join(', ')}`);
     const results = [];
     const emailPayloads = [];
     const identity = await springService.getIdentity();
@@ -160,12 +160,12 @@ ${idx + 1}.
             }));
         }
     }
-    console.log('🎉 전체 이메일 생성 완료');
+    console.log('전체 이메일 생성 완료');
     return results; // 항상 배열 반환
 }
 // 2. 후속 메일 생성
 export async function generateFollowupEmail({ userPrompt }) {
-    console.log('📧 Follow-up Email 생성 시작:', userPrompt);
+    console.log('Follow-up Email 생성 시작:', userPrompt);
     // 직접 파싱 시도 (후속메일요청 projectId=3 leadId=5 형식)
     const directMatch = userPrompt.match(/후속메일요청 projectId=(\d+) leadId=(\d+) originalEmailId=([^ ]+) followupReason="([^"]*?)"/);
     let projectId, leadId, originalEmailId, followupReason;
@@ -183,7 +183,7 @@ export async function generateFollowupEmail({ userPrompt }) {
         }
     }
     else {
-        console.log('🔄 AI 파싱으로 fallback');
+        console.log('AI 파싱으로 fallback');
         // AI를 통한 파라미터 추출
         const paramPrompt = `
 아래 프롬프트에서 projectId, leadId, originalEmailId, followupReason을 추출해.
@@ -252,9 +252,9 @@ START YOUR RESPONSE WITH { AND END WITH }
     const maxRetries = 3;
     while (retryCount <= maxRetries) {
         try {
-            console.log(`🔄 AI Follow-up Email 생성 시도 ${retryCount + 1}/${maxRetries + 1}`);
-            console.log(`📝 전송할 프롬프트:`, systemPrompt);
-            console.log(`📝 전송할 데이터:`, `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n후속 사유: ${followupReason}`);
+            console.log(`AI Follow-up Email 생성 시도 ${retryCount + 1}/${maxRetries + 1}`);
+            console.log(`전송할 프롬프트:`, systemPrompt);
+            console.log(`전송할 데이터:`, `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n후속 사유: ${followupReason}`);
             mailResult = await agent.conversate([
                 { type: 'text', text: systemPrompt },
                 { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n후속 사유: ${followupReason}` }
@@ -270,7 +270,7 @@ START YOUR RESPONSE WITH { AND END WITH }
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
             else {
-                console.error(`❌ 최대 재시도 횟수 초과 또는 다른 오류:`, error);
+                console.error(`최대 재시도 횟수 초과 또는 다른 오류:`, error);
                 throw error;
             }
         }
@@ -279,14 +279,14 @@ START YOUR RESPONSE WITH { AND END WITH }
     const mailText = typeof lastMail === 'string'
         ? lastMail
         : lastMail.content ?? lastMail.text ?? '';
-    console.log('🔄 AI Follow-up Email 응답:', mailText);
-    console.log('🔄 AI 응답 길이:', mailText.length);
+    console.log('AI Follow-up Email 응답:', mailText);
+    console.log('AI 응답 길이:', mailText.length);
     const match = mailText.match(/\{.*\}/s);
-    console.log('🔄 JSON 매치 결과:', match ? '성공' : '실패');
+    console.log('JSON 매치 결과:', match ? '성공' : '실패');
     if (match) {
         try {
             const parsed = JSON.parse(match[0]);
-            console.log('✅ Follow-up Email 생성 완료');
+            console.log('Follow-up Email 생성 완료');
             return { subject: parsed.subject, body: parsed.body, status: 'success' };
         }
         catch (error) {
@@ -314,7 +314,7 @@ export async function regenerateEmailWithFeedback({ userPrompt }) {
             jsonStr = jsonStr.replace(/"/g, '\\"').replace(/\\"/g, '"');
             originalEmail = JSON.parse(jsonStr);
             userFeedback = directMatch[4];
-            console.log('✅ 직접 파싱 성공');
+            console.log('직접 파싱 성공');
         }
         catch (parseError) {
             console.error('직접 파싱 실패:', parseError);
@@ -386,9 +386,9 @@ START YOUR RESPONSE WITH { AND END WITH }
     const maxRetries = 3;
     while (retryCount <= maxRetries) {
         try {
-            console.log(`🔄 AI 이메일 재작성 시도 ${retryCount + 1}/${maxRetries + 1}`);
-            console.log(`📝 전송할 프롬프트:`, systemPrompt);
-            console.log(`📝 전송할 데이터:`, `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}`);
+            console.log(`AI 이메일 재작성 시도 ${retryCount + 1}/${maxRetries + 1}`);
+            console.log(`전송할 프롬프트:`, systemPrompt);
+            console.log(`전송할 데이터:`, `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}`);
             mailResult = await agent.conversate([
                 { type: 'text', text: systemPrompt },
                 { type: 'text', text: `사업 설명: ${project.description}\n고객 정보: ${JSON.stringify(lead)}\n원본 이메일: ${JSON.stringify(originalEmail)}\n피드백: ${userFeedback}` }
@@ -401,11 +401,11 @@ START YOUR RESPONSE WITH { AND END WITH }
                 // Rate Limit 헤더에서 대기 시간 추출 (기본값: 15초)
                 const retryAfter = error.headers?.['retry-after-ms'] || 15000;
                 const waitTime = Math.max(parseInt(retryAfter), 15000); // 최소 15초
-                console.log(`⏳ Rate limit 도달 (${retryCount}/${maxRetries}), ${waitTime / 1000}초 후 재시도...`);
+                console.log(`Rate limit 도달 (${retryCount}/${maxRetries}), ${waitTime / 1000}초 후 재시도...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
             else {
-                console.error(`❌ 최대 재시도 횟수 초과 또는 다른 오류:`, error);
+                console.error(`최대 재시도 횟수 초과 또는 다른 오류:`, error);
                 throw error;
             }
         }
@@ -414,10 +414,10 @@ START YOUR RESPONSE WITH { AND END WITH }
     const mailText = typeof lastMail === 'string'
         ? lastMail
         : lastMail.content ?? lastMail.text ?? '';
-    console.log('🔄 AI 이메일 재작성 응답:', mailText);
-    console.log('🔄 AI 응답 길이:', mailText.length);
+    console.log('AI 이메일 재작성 응답:', mailText);
+    console.log('AI 응답 길이:', mailText.length);
     const match = mailText.match(/\{.*\}/s);
-    console.log('🔄 JSON 매치 결과:', match ? '성공' : '실패');
+    console.log('JSON 매치 결과:', match ? '성공' : '실패');
     if (match) {
         try {
             const parsed = JSON.parse(match[0]);
@@ -475,7 +475,7 @@ priority: high|medium|low
 }
 // 5. 통합된 이메일 재작성 처리 (거부/취소 모두 처리)
 export async function handleEmailRejection({ userPrompt }) {
-    console.log('🔄 통합 이메일 재작성 처리 시작:', userPrompt);
+    console.log('통합 이메일 재작성 처리 시작:', userPrompt);
     // 발송 취소 요청인지 확인 (재작성요청 키워드)
     const isCancelRequest = userPrompt.includes('재작성요청');
     if (isCancelRequest) {
@@ -489,11 +489,11 @@ export async function handleEmailRejection({ userPrompt }) {
         const analysis = await analyzeEmailIssues({ userPrompt });
         // 심각하면 재작성, 아니면 개선안 안내
         if (analysis.priority === 'high' || (analysis.issues && analysis.issues.length > 2)) {
-            console.log('🔴 심각한 문제 감지 - 재작성 진행');
+            console.log('심각한 문제 감지 - 재작성 진행');
             return await regenerateEmailWithFeedback({ userPrompt });
         }
         else {
-            console.log('🟡 경미한 문제 감지 - 개선안 안내');
+            console.log('경미한 문제 감지 - 개선안 안내');
             return {
                 action: 'improve',
                 analysis,
