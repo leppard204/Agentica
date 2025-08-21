@@ -6,7 +6,6 @@ import * as emailFuncs from './functions/emailFunctions.js';
 export async function chatbotHandler(input) {
     const { intent, extracted_params } = await analyzePromptAI(input);
     console.log('analyzePromptAI 결과:', intent, extracted_params);
-    // ✅ 모든 응답에 intent 정보를 포함시켜서 반환
     let functionResult;
     switch (intent) {
         case 'register_project':
@@ -53,9 +52,9 @@ export async function chatbotHandler(input) {
             };
             break;
     }
-    // ✅ intent 정보를 항상 포함해서 반환
+    //intent 정보를 항상 포함해서 반환
     return {
-        intent, // 여기가 핵심! fallback에서 분류한 intent도 포함됨
+        intent,
         ...functionResult
     };
 }

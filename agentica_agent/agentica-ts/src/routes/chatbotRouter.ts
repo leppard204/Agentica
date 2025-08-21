@@ -12,15 +12,15 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: '메시지가 필요합니다.' });
     }
 
-    console.log('🤖 챗봇 요청 받음:', message);
+    console.log('챗봇 요청 받음:', message);
     
     const result = await chatbotHandler(message);
     
-    console.log('🤖 챗봇 응답:', result);
+    console.log('챗봇 응답:', result);
     
     res.json(result);
   } catch (error) {
-    console.error('❌ 챗봇 처리 오류:', error);
+    console.error('챗봇 처리 오류:', error);
     res.status(500).json({ error: '챗봇 처리 중 오류가 발생했습니다.' });
   }
 });

@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post('/summarize', async (req: Request, res: Response) => {
 
-    console.log('📥 요청 받은 바디:', req.body);
+    console.log('요청 받은 바디:', req.body);
     const { leadName, projectName, subject, body } = req.body;
 
     if (!leadName || !projectName || !subject || !body) {
@@ -21,7 +21,7 @@ router.post('/summarize', async (req: Request, res: Response) => {
         });
         res.json(result);
     } catch (e) {
-        console.error('❌ summarize 처리 중 오류:', e);
+        console.error('summarize 처리 중 오류:', e);
         res.status(500).json({ error: '서버 오류' });
     }
 });

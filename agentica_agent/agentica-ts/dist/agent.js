@@ -799,23 +799,47 @@ export const agent = new Agentica({
                                 "userPrompt"
                             ],
                             additionalProperties: false,
-                            $defs: {}
+                            $defs: {
+                                Lead: {
+                                    type: "object",
+                                    properties: {
+                                        id: {
+                                            type: "number"
+                                        },
+                                        name: {
+                                            type: "string"
+                                        },
+                                        industry: {
+                                            type: "string"
+                                        },
+                                        contactEmail: {
+                                            type: "string"
+                                        },
+                                        contactName: {
+                                            type: "string"
+                                        },
+                                        createdAt: {
+                                            type: "string"
+                                        },
+                                        size: {
+                                            type: "string"
+                                        },
+                                        language: {
+                                            type: "string"
+                                        }
+                                    },
+                                    required: [
+                                        "id",
+                                        "name",
+                                        "industry",
+                                        "contactEmail",
+                                        "createdAt"
+                                    ]
+                                }
+                            }
                         },
                         output: {
                             anyOf: [
-                                {
-                                    type: "object",
-                                    properties: {
-                                        status: {
-                                            type: "string"
-                                        },
-                                        data: {}
-                                    },
-                                    required: [
-                                        "status",
-                                        "data"
-                                    ]
-                                },
                                 {
                                     type: "object",
                                     properties: {
@@ -829,6 +853,17 @@ export const agent = new Agentica({
                                     required: [
                                         "status",
                                         "error"
+                                    ]
+                                },
+                                {
+                                    type: "object",
+                                    properties: {
+                                        lead: {
+                                            $ref: "#/$defs/Lead"
+                                        }
+                                    },
+                                    required: [
+                                        "lead"
                                     ]
                                 }
                             ]
@@ -990,9 +1025,66 @@ export const agent = new Agentica({
                                 "userPrompt"
                             ],
                             additionalProperties: false,
-                            $defs: {}
+                            $defs: {
+                                Project: {
+                                    type: "object",
+                                    properties: {
+                                        id: {
+                                            type: "number"
+                                        },
+                                        name: {
+                                            type: "string"
+                                        },
+                                        description: {
+                                            type: "string"
+                                        },
+                                        industry: {
+                                            type: "string"
+                                        },
+                                        createdAt: {
+                                            type: "string"
+                                        }
+                                    },
+                                    required: [
+                                        "id",
+                                        "name",
+                                        "description",
+                                        "industry",
+                                        "createdAt"
+                                    ]
+                                }
+                            }
                         },
-                        output: {},
+                        output: {
+                            anyOf: [
+                                {
+                                    type: "object",
+                                    properties: {
+                                        status: {
+                                            type: "string"
+                                        },
+                                        error: {
+                                            type: "string"
+                                        }
+                                    },
+                                    required: [
+                                        "status",
+                                        "error"
+                                    ]
+                                },
+                                {
+                                    type: "object",
+                                    properties: {
+                                        project: {
+                                            $ref: "#/$defs/Project"
+                                        }
+                                    },
+                                    required: [
+                                        "project"
+                                    ]
+                                }
+                            ]
+                        },
                         validate: (() => { const _io0 = input => "string" === typeof input.userPrompt; const _vo0 = (input, _path, _exceptionable = true) => ["string" === typeof input.userPrompt || _report(_exceptionable, {
                                 path: _path + ".userPrompt",
                                 expected: "string",

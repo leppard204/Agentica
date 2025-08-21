@@ -1,5 +1,6 @@
 import { agent } from '../agent.js';
 import { springService } from '../services/springService.js';
+import { Lead, Project } from '../types/index.js';
 
 const INDUSTRY_KEYWORDS: Record<string, string> = {
   'ai': 'AI', '에이아이': 'AI', 'ai계열': 'AI', '인공지능': 'AI',
@@ -161,25 +162,31 @@ LG CNS 기업 등록. 산업은 IT이고, 한국어 사용하며 대기업임. �
     };
 
     if (!parsed.companyName || !parsed.contactEmail) {
-      console.log("❌ fallback에서도 필수 항목 누락됨:", parsed);
+      console.log("fallback에서도 필수 항목 누락됨:", parsed);
       return { status: 'error', error: '필수 항목 누락' };
     }
 
     console.log("📨 fallback 기반 저장 payload:", parsed);
-    return await springService.createLead(parsed);
+    await springService.createLead(parsed);
+    return{
+      lead : parsed as Lead
+    }
   }
 
-  // ✅ GPT 정상 응답 구간
+  // GPT 정상 응답 구간
   parsed.companyName = parsed.name ?? null;
   delete parsed.name;
 
   if (!parsed.companyName || !parsed.contactEmail) {
-    console.log("❌ GPT 응답 기반에서도 필수 누락:", parsed);
+    console.log("GPT 응답 기반에서도 필수 누락:", parsed);
     return { status: 'error', error: '필수 항목 누락' };
   }
 
-  console.log("📨 GPT 기반 저장 payload:", parsed);
-  return await springService.createLead(parsed);
+  console.log("GPT 기반 저장 payload:", parsed);
+  await springService.createLead(parsed);
+  return{
+      lead : parsed as Lead
+  }
 }
 
 
@@ -214,7 +221,7 @@ export async function autoConnectLeads({ userPrompt }: { userPrompt: string }) {
       ? last
       : (last as any).content ?? (last as any).text ?? '';
 
-  // ✅ 코드블럭 제거
+  // 코드블럭 제거
   const cleaned = lastText.replace(/```json|```/g, '').trim();
   const match = cleaned.match(/\{.*\}/s);
   if (!match) {
@@ -232,7 +239,7 @@ export async function autoConnectLeads({ userPrompt }: { userPrompt: string }) {
       return { status: 'error', error: 'projectName 또는 leadNames 누락됨' };
     }
 
-    // ✅ projectName 정제
+    // projectName 정제
     const cleanProjectName = normalizeProjectName(parsed.projectName);
 
     return await springService.autoConnectLeadsByNameAndLeads(
